@@ -1,0 +1,10 @@
+[workspace]
+members = ["packages/*", "apps/*"]
+requires-python = ">=3.12"
+
+[project]
+name = "portfolio-integration"
+version = "0.1.0"
+description = "Portfolio integration monorepo (workspace coordinator)"
+requires-python = ">=3.12"
+dependencies = []
