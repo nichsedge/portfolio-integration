@@ -1,0 +1,51 @@
+[project]
+name = "ksei"
+version = "0.1.2"
+description = "A Python client for interacting with the KSEI (PT Kustodian Sentral Efek Indonesia) API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+maintainers = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+keywords = ["ksei", "indonesia", "securities", "depository", "ksei", "finance", "indonesian-capital-market"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = [
+    "fake-useragent>=2.2.0",
+    "pyjwt>=2.10.1",
+    "httpx>=0.27.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nichsedge/ksei"
+Documentation = "https://github.com/nichsedge/ksei#readme"
+Repository = "https://github.com/nichsedge/ksei.git"
+"Bug Tracker" = "https://github.com/nichsedge/ksei/issues"
+
+[project.scripts]
+ksei = "ksei:main"
+
+[build-system]
+requires = ["uv_build>=0.8.2,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "python-dotenv>=1.1.1",
+]
