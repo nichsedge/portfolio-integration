@@ -114,5 +114,21 @@ def integrate_entrypoint():
     main()
 
 
+def fetch_solana_entrypoint():
+    """Entry point for Solana fetch command."""
+    from solana_client import main as solana_main
+    
+    # Get data directory
+    repo_root = Path(__file__).resolve().parents[4]
+    default_data_dir = repo_root / "data"
+    data_dir = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or str(default_data_dir)
+    
+    print("🚀 Fetching Solana holdings...")
+    print(f"Data directory: {data_dir}\n")
+    
+    # Call solana fetcher with output directory
+    solana_main(output_dir=data_dir)
+
+
 if __name__ == "__main__":
     main()
