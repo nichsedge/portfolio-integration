@@ -1,6 +1,13 @@
-[workspace]
+[tool.uv.workspace]
 members = ["packages/*", "apps/*"]
-requires-python = ">=3.12"
+
+[tool.uv]
+managed = true
+
+[tool.uv.scripts]
+run-pipeline = "uv run --package pipeline-runner pipeline-runner"
+fetch = "uv run --package pipeline-runner pipeline-runner --fetch-only"
+integrate = "uv run --package pipeline-runner pipeline-runner --integrate"
 
 [project]
 name = "portfolio-integration"

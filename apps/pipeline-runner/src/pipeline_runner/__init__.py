@@ -48,13 +48,14 @@ def main():
     parser.add_argument("--integrate", action="store_true", help="Skip fetching, just integrate")
     args = parser.parse_args()
 
-    data_dir = os.getenv("PORTFOLIO_DATA_DIR", "/REDACTED_HOME/Projects/.data/portfolio")
+    # Get repo root path
+    repo_root = Path(__file__).resolve().parents[3]
+    default_data_dir = repo_root / "data"
+
+    data_dir = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or str(default_data_dir)
 
     print("🚀 Portfolio Integration Pipeline")
     print(f"Data directory: {data_dir}\n")
-
-    # Get repo root path
-    repo_root = Path(__file__).parents[3]
 
     if not args.integrate:
         # Step 1: Fetch Raw Data
