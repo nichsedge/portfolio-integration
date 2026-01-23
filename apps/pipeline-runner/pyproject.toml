@@ -20,6 +20,9 @@ portfolio-app = { workspace = true }
 
 [project.scripts]
 pipeline-runner = "pipeline_runner:main"
+run-pipeline = "pipeline_runner:main"
+fetch = "pipeline_runner:fetch_entrypoint"
+integrate = "pipeline_runner:integrate_entrypoint"
 
 [build-system]
 requires = ["hatchling"]
