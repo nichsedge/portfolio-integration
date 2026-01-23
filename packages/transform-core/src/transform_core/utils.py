@@ -32,30 +32,28 @@ def get_data_dir() -> Path:
 
 def parse_usd(value: Union[str, int, float, None]) -> float:
     """
-    Convert a USD string like '$123.45' to float, handle '<$0.01' and None.
+    Convert a USD string like '$123.45' or '472.16 USDC' to float, handle '<$0.01' and None.
 
     Args:
         value: The value to parse (string, int, float, or None)
 
     Returns:
         float: The parsed USD value, or 0.0 if unparseable
-
-    Examples:
-        >>> parse_usd("$123.45")
-        123.45
-        >>> parse_usd("<$0.01")
-        0.0
-        >>> parse_usd(None)
-        0.0
-        >>> parse_usd(100)
-        100.0
     """
-    if value is None or isinstance(value, (int, float)):
-        return float(value or 0)
-    if '<' in str(value):
+    if value is None:
         return 0.0
-    value = str(value).replace('$', '').replace(',', '').strip()
-    try:
+    if isinstance(value, (int, float)):
         return float(value)
-    except ValueError:
+    
+    val_str = str(value).replace(',', '').strip()
+    if '<' in val_str:
         return 0.0
+        
+    # Extract numeric part (e.g., from '472.16 USDC' or '$472.16')
+    match = re.search(r"[-+]?\d*\.?\d+", val_str)
+    if match:
+        try:
+            return float(match.group())
+        except ValueError:
+            return 0.0
+    return 0.0
