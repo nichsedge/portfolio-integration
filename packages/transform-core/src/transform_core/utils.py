@@ -7,7 +7,9 @@ import re
 from pathlib import Path
 from typing import Union
 
-DATA_DIR_DEFAULT = "/home/al/Projects/.data/portfolio"
+# Find the repo root (assumes this file is in packages/transform-core/src/transform_core/utils.py)
+REPO_ROOT = Path(__file__).resolve().parents[4]
+DATA_DIR_DEFAULT = REPO_ROOT / "data"
 
 
 def get_data_dir() -> Path:
@@ -17,13 +19,15 @@ def get_data_dir() -> Path:
     Priority:
     1. PORTFOLIO_DATA_DIR environment variable
     2. DATA_DIR environment variable (alias)
-    3. Hardcoded default: /home/al/Projects/.data/portfolio
+    3. Hardcoded default: [Project Root]/data
 
     Returns:
         Path object pointing to the data directory
     """
-    data_dir = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or DATA_DIR_DEFAULT
-    return Path(data_dir)
+    data_dir = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR")
+    if data_dir:
+        return Path(data_dir)
+    return DATA_DIR_DEFAULT
 
 
 def parse_usd(value: Union[str, int, float, None]) -> float:

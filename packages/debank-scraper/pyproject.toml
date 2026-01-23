@@ -1,0 +1,10 @@
+[project]
+name = "debank-scraper"
+version = "0.1.0"
+description = "DeBank scraper and data cleaner"
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

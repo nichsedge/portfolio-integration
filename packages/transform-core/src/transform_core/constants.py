@@ -2,7 +2,7 @@
 Constants for portfolio data transformation.
 """
 
-DATA_DIR_DEFAULT = "/home/al/Projects/.data/portfolio"
+from .utils import DATA_DIR_DEFAULT
 
 FILTER_THRESHOLDS = {
     "ksei_idr": 10000,
