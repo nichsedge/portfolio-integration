@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 # Add packages to path for imports
-repo_root = Path(__file__).parents[3]
+repo_root = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(repo_root / "packages"))
 
 
@@ -49,7 +49,7 @@ def main():
     args = parser.parse_args()
 
     # Get repo root path
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[4]
     default_data_dir = repo_root / "data"
 
     data_dir = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or str(default_data_dir)
@@ -88,7 +88,7 @@ def main():
 
         for name, script_path in transform_files:
             if script_path.exists():
-                run_step(name, str(script_path), [sys.executable, str(script_path)])
+                run_step(name, str(script_path.parent), [sys.executable, str(script_path)])
             else:
                 print(f"⚠ Skipping {name}: script not found")
 
@@ -98,6 +98,20 @@ def main():
         run_step("Integration", str(integrator_path.parent), [sys.executable, str(integrator_path)])
 
     print("\n✨ Pipeline completed successfully!")
+
+
+def fetch_entrypoint():
+    """Entry point for fetch command."""
+    import sys
+    sys.argv = [sys.argv[0], "--fetch-only"]
+    main()
+
+
+def integrate_entrypoint():
+    """Entry point for integrate command."""
+    import sys
+    sys.argv = [sys.argv[0], "--integrate"]
+    main()
 
 
 if __name__ == "__main__":

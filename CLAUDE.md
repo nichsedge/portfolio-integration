@@ -121,7 +121,7 @@ npm install
 
 | Variable | Purpose | Default Value |
 |----------|---------|---------------|
-| `PORTFOLIO_DATA_DIR` | Main data directory path | `/REDACTED_HOME/Projects/.data/portfolio` |
+| `PORTFOLIO_DATA_DIR` | Main data directory path | `[REPO_ROOT]/data` |
 | `DATA_DIR` | Alias for PORTFOLIO_DATA_DIR (legacy) | Same as above |
 | `HYPERLIQUID_WALLET_ADDRESS` | EVM wallet address for Hyperliquid | (required) |
 
@@ -144,18 +144,17 @@ npm install
 
 ## Running the Pipeline
 
-### Full Pipeline (Recommended)
+### Pipeline Commands (Recommended)
 
+Run optimization via `uv run`:
 ```bash
 cd /REDACTED_HOME/Projects/portfolio_integration
-python -m apps.pipeline_runner.src.main
+uv run run-pipeline       # Full pipeline
+uv run fetch              # Just fetch raw data
+uv run integrate          # Just integrate existing data
 ```
 
-With options:
-```bash
-python -m apps.pipeline_runner.src.main --fetch-only     # Just fetch raw data
-python -m apps.pipeline_runner.src.main --integrate      # Skip fetching, just transform and integrate
-```
+Note: These commands are installed via the `pipeline-runner` workspace package. Run `uv sync` to ensure they are available in your environment.
 
 ### Individual Steps
 

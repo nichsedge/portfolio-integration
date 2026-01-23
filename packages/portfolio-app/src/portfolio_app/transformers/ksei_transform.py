@@ -1,4 +1,5 @@
 import json
+import sys
 import pendulum
 from pathlib import Path
 
@@ -46,18 +47,19 @@ def clean_json(data):
 
     return filtered
 
-# Load input from file
-td = pendulum.now().format('YYYY-MM-DD')
-data_dir = get_data_dir()
-raw_path = data_dir / f"{td}_raw_ksei.json"
-curated_path = data_dir / f"{td}_curated_ksei.json"
+if __name__ == "__main__":
+    # Load input from file
+    td = pendulum.now().format('YYYY-MM-DD')
+    data_dir = get_data_dir()
+    raw_path = data_dir / f"{td}_raw_ksei.json"
+    curated_path = data_dir / f"{td}_curated_ksei.json"
 
-with open(raw_path, "r", encoding="utf-8") as file:
-    original_data = json.load(file)
+    with open(raw_path, "r", encoding="utf-8") as file:
+        original_data = json.load(file)
 
-# Clean the data
-cleaned_data = clean_json(original_data)
+    # Clean the data
+    cleaned_data = clean_json(original_data)
 
-# Write output to file
-with open(curated_path, "w", encoding="utf-8") as file:
-    json.dump(cleaned_data, file, indent=2, ensure_ascii=False)
+    # Write output to file
+    with open(curated_path, "w", encoding="utf-8") as file:
+        json.dump(cleaned_data, file, indent=2, ensure_ascii=False)

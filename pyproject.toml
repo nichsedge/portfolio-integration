@@ -4,14 +4,14 @@ members = ["packages/*", "apps/*"]
 [tool.uv]
 managed = true
 
-[tool.uv.scripts]
-run-pipeline = "uv run --package pipeline-runner pipeline-runner"
-fetch = "uv run --package pipeline-runner pipeline-runner --fetch-only"
-integrate = "uv run --package pipeline-runner pipeline-runner --integrate"
-
 [project]
 name = "portfolio-integration"
 version = "0.1.0"
 description = "Portfolio integration monorepo (workspace coordinator)"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pipeline-runner",
+]
+
+[tool.uv.sources]
+pipeline-runner = { workspace = true }

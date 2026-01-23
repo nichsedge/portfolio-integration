@@ -7,10 +7,18 @@ from pathlib import Path
 
 # Import cleaning functions from existing modules
 import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from ksei import clean_json
-from debank import extract_relevant, parse_usd
-from utils.path_utils import get_data_dir
+from pathlib import Path
+
+# Setup paths for monorepo imports
+file_path = Path(__file__).resolve()
+# Current file: packages/portfolio-app/src/portfolio_app/integrators/portfolio_integration.py
+repo_root = file_path.parents[5]
+sys.path.append(str(repo_root / "packages/portfolio-app/src"))
+sys.path.append(str(repo_root / "packages/transform-core/src"))
+
+from portfolio_app.transformers.ksei_transform import clean_json
+from portfolio_app.transformers.debank_transform import extract_relevant
+from transform_core import get_data_dir, parse_usd
 
 def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert KSEI data to standardized format."""
