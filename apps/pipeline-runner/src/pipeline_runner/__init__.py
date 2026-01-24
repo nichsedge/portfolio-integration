@@ -84,6 +84,7 @@ def main():
             ("KSEI transform", portfolio_app_path / "src/portfolio_app/transformers/ksei_transform.py"),
             ("DeBank transform", portfolio_app_path / "src/portfolio_app/transformers/debank_transform.py"),
             ("Binance transform", portfolio_app_path / "src/portfolio_app/transformers/binance_transform.py"),
+            ("Solana transform", portfolio_app_path / "src/portfolio_app/transformers/solana_transform.py"),
         ]
 
         for name, script_path in transform_files:
