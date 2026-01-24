@@ -178,6 +178,32 @@ def standardize_binance_data(binance_data: Dict[str, Any]) -> List[Dict[str, Any
     return standardized
 
 
+def standardize_solana_data(solana_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert Solana curated data to standardized format."""
+    standardized = []
+
+    for asset in solana_data.get("assets", []):
+        asset_symbol = asset.get("symbol", "Unknown")
+        name = asset.get("name", "Unknown Token")
+        price = asset.get("price", 0)
+        amount = asset.get("amount", 0)
+        value_usd = asset.get("value_usd", 0)
+
+        standardized.append({
+            "source": "Solana",
+            "category": "Cryptocurrency",
+            "asset": asset_symbol,
+            "currency": "USD",
+            "amount": amount,
+            "value_idr": None,
+            "value_usd": value_usd,
+            "account": "Solana Wallet",
+            "details": f"Token: {name}, Price: ${price:,.4f}, Amount: {amount:,.8f}"
+        })
+
+    return standardized
+
+
 def main():
     """Main function to integrate KSEI and DeBank data into CSV."""
     # Get today's date
@@ -188,6 +214,7 @@ def main():
     ksei_raw_path = data_dir / f"{td}_raw_ksei.json"
     debank_raw_path = data_dir / f"{td}_raw_debank.json"
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
+    solana_curated_path = data_dir / f"{td}_curated_solana.json"
     output_csv_path = data_dir / f"{td}_portfolio.csv"
 
 
@@ -210,6 +237,17 @@ def main():
         binance_standardized = []
         binance_loaded = False
 
+    # Try to load Solana data (optional)
+    try:
+        with open(solana_curated_path, "r", encoding="utf-8") as f:
+            solana_curated = json.load(f)
+        solana_standardized = standardize_solana_data(solana_curated)
+        solana_loaded = True
+    except FileNotFoundError:
+        print("Solana curated data not found, skipping...")
+        solana_standardized = []
+        solana_loaded = False
+
     # Clean and process data
     ksei_clean = clean_json(ksei_raw)
     debank_clean = extract_relevant(debank_raw)
@@ -219,7 +257,7 @@ def main():
     debank_standardized = standardize_debank_data(debank_clean)
 
     # Combine all data
-    all_data = ksei_standardized + debank_standardized + binance_standardized
+    all_data = ksei_standardized + debank_standardized + binance_standardized + solana_standardized
 
     # Sort by value (descending) - use value in whichever currency is available
     def sort_key(item):
@@ -254,6 +292,8 @@ def main():
     sources_parts = [f"KSEI ({len(ksei_standardized)} items)", f"DeBank ({len(debank_standardized)} items)"]
     if binance_loaded:
         sources_parts.append(f"Binance ({len(binance_standardized)} items)")
+    if solana_loaded:
+        sources_parts.append(f"Solana ({len(solana_standardized)} items)")
     print(f"Sources: {', '.join(sources_parts)}")
 
     if total_idr > 0:
