@@ -11,6 +11,8 @@ description = "Portfolio integration monorepo (workspace coordinator)"
 requires-python = ">=3.12"
 dependencies = [
     "pipeline-runner",
+    "pendulum>=3.0.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [tool.uv.sources]

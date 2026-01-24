@@ -1,12 +1,16 @@
 import ccxt
 import json
 import os
-from datetime import datetime
+import socket
+import pendulum
 from dotenv import load_dotenv
 from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Set socket timeout for all connections (30 seconds)
+socket.setdefaulttimeout(30)
 
 
 def get_data_dir():
@@ -24,15 +28,19 @@ def get_binance_balance(api_key, secret):
             'apiKey': api_key,
             'secret': secret,
             'enableRateLimit': True,
+            'timeout': 30000,  # 30 second timeout in milliseconds
         })
         
         balances = {}
         
         # 1. Fetch Spot Balance
-        spot_balance = exchange.fetch_balance({'type': 'spot'})
-        for symbol, total in spot_balance.get('total', {}).items():
-            if total > 0:
-                balances[symbol] = balances.get(symbol, 0) + total
+        try:
+            spot_balance = exchange.fetch_balance({'type': 'spot'})
+            for symbol, total in spot_balance.get('total', {}).items():
+                if total > 0:
+                    balances[symbol] = balances.get(symbol, 0) + total
+        except (socket.timeout, TimeoutError, ccxt.NetworkError) as e:
+            print(f"Warning: Binance spot balance timeout (may be blocked/unreachable): {e}")
         
         # 2. Fetch Earn/Simple Earn Balance (Flexible & Locked)
         # Note: CCXT uses 'sapi' for these Binance-specific endpoints
@@ -52,10 +60,15 @@ def get_binance_balance(api_key, secret):
                 total = float(item['totalAmount'])
                 if total > 0:
                     balances[symbol] = balances.get(symbol, 0) + total
+        except (socket.timeout, TimeoutError, ccxt.NetworkError) as e:
+            print(f"Note: Could not fetch Binance Earn balances (timeout/blocked): {e}")
         except Exception as e:
             print(f"Note: Could not fetch Binance Earn balances: {e}")
 
         return balances
+    except (socket.timeout, TimeoutError, ccxt.NetworkError) as e:
+        print(f"Error: Binance connection timeout/unreachable (may be blocked): {e}")
+        return {}
     except Exception as e:
         print(f"Error fetching balance from Binance: {e}")
         return {}
@@ -71,9 +84,13 @@ def get_exchange_balance(exchange_id, api_key, secret):
             'apiKey': api_key,
             'secret': secret,
             'enableRateLimit': True,
+            'timeout': 30000,  # 30 second timeout in milliseconds
         })
         balance = exchange.fetch_balance()
         return balance.get('total', {}) or {}
+    except (socket.timeout, TimeoutError, ccxt.NetworkError) as e:
+        print(f"Error: {exchange_id} connection timeout/unreachable: {e}")
+        return {}
     except Exception as e:
         print(f"Error fetching balance from {exchange_id}: {e}")
         return {}
@@ -93,6 +110,22 @@ def get_prices_usd(symbols, exchange):
         for symbol_pair, ticker in tickers.items():
             base = symbol_pair.split('/')[0]
             prices[base] = float(ticker['last'])
+    except (socket.timeout, TimeoutError, ccxt.NetworkError):
+        print("Warning: Price fetch timeout (may be blocked/unreachable), skipping price updates")
+        # Fallback to individual fetches if fetch_tickers fails
+        for symbol in symbols:
+            if symbol in prices: continue
+            try:
+                ticker = exchange.fetch_ticker(f"{symbol}/USDT")
+                prices[symbol] = float(ticker['last'])
+            except (socket.timeout, TimeoutError, ccxt.NetworkError):
+                continue
+            except:
+                try:
+                    ticker = exchange.fetch_ticker(f"{symbol}/BUSD")
+                    prices[symbol] = float(ticker['last'])
+                except:
+                    pass
     except:
         # Fallback to individual fetches if fetch_tickers fails
         for symbol in symbols:
@@ -118,9 +151,9 @@ def main():
         all_balances[symbol] = all_balances.get(symbol, 0) + amount
         
     # Tokocrypto (Spot)
-    tko_balances = get_exchange_balance('tokocrypto', os.getenv('TKO_API_KEY'), os.getenv('TKO_SECRET'))
-    for symbol, amount in tko_balances.items():
-        all_balances[symbol] = all_balances.get(symbol, 0) + amount
+    # tko_balances = get_exchange_balance('tokocrypto', os.getenv('TKO_API_KEY'), os.getenv('TKO_SECRET'))
+    # for symbol, amount in tko_balances.items():
+    #     all_balances[symbol] = all_balances.get(symbol, 0) + amount
 
     if not all_balances:
         print("No balances found. Check your API keys and .env file.")
@@ -151,7 +184,7 @@ def main():
     assets_with_value.sort(key=lambda x: x['value_usd'], reverse=True)
 
     output = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": pendulum.now('UTC').isoformat(),
         "total_usd": total_usd,
         "assets": assets_with_value
     }
@@ -164,7 +197,7 @@ def main():
         data_dir = get_data_dir()
 
     os.makedirs(data_dir, exist_ok=True)
-    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    date_str = pendulum.now('UTC').strftime("%Y-%m-%d")
     out_path = data_dir / f"{date_str}_raw_binance.json"
 
     with open(out_path, "w", encoding="utf-8") as f:
