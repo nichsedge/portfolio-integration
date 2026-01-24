@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "ccxt>=4.0.0",
-    "python-dotenv>=1.0.0",
 ]
 
 [build-system]
