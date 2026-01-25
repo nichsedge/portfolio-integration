@@ -1,0 +1,16 @@
+{
+  "name": "qazwa-scraper",
+  "version": "0.1.0",
+  "description": "QAZWA portfolio scraper using Playwright",
+  "type": "module",
+  "scripts": {
+    "scrape": "node qazwa.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "playwright": "^1.54.2"
+  },
+  "devDependencies": {
+    "npm": "^11.5.2"
+  }
+}
