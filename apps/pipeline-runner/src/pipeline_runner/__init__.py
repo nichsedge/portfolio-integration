@@ -71,7 +71,7 @@ def main():
 
         # Binance
         binance_path = repo_root / "packages/binance-client"
-        run_step("Binance", str(binance_path), ["uv", "run", "ccxt_balance.py"])
+        run_step("Binance", str(binance_path), ["uv", "run", "binance-fetch"])
 
         # Solana
         solana_path = repo_root / "packages/solana-client"
