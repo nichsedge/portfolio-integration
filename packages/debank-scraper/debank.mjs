@@ -268,7 +268,7 @@ async function extractProtocols(page) {
 
 
 (async () => {
-  const browser = await chromium.launch({ headless: false });
+  const browser = await chromium.launch({ channel: 'chrome', headless: false });
   const page = await browser.newPage();
   await page.goto(PROFILE_URL, { waitUntil: "domcontentloaded" });
 
