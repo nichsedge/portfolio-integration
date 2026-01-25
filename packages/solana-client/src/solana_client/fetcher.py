@@ -12,7 +12,10 @@ TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6u2C158cH4p7ix88Kz51b"
 WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112"
 
 def get_token_metadata():
-    """Fetch token list from Jupiter for metadata resolution."""
+    """Fetch token list from Jupiter for metadata resolution.
+
+    Falls back to the Solana Labs token-list if Jupiter is unavailable.
+    """
     print("Fetching token metadata from Jupiter...")
     try:
         # Try the strict list first
@@ -22,15 +25,33 @@ def get_token_metadata():
         return {t['address']: t for t in tokens}
     except Exception as e:
         print(f"Warning: Failed to fetch token metadata from Jupiter: {e}")
-        # Fallback: return empty dict, we'll use mint addresses as symbols
-        return {}
+        # Fallback: try Solana token list
+        try:
+            print("Attempting fallback token list from Solana token-list...")
+            response = requests.get(
+                "https://raw.githubusercontent.com/solana-labs/token-list/main/src/tokens/solana.tokenlist.json",
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            tokens = data.get('tokens', [])
+            return {t['address']: t for t in tokens}
+        except Exception as e2:
+            print(f"Warning: Failed to fetch fallback token list: {e2}")
+            # Final fallback: return empty dict, we'll use mint addresses as symbols
+            return {}
 
 def get_token_prices(mints):
-    """Fetch current prices for given mints using DexScreener API."""
+    """Fetch current prices for given mints using DexScreener API.
+
+    Returns a tuple (prices, symbols) where `prices` maps mint -> price (float)
+    and `symbols` maps mint -> inferred symbol (if available from the price API).
+    """
     if not mints:
-        return {}
+        return {}, {}
     print(f"Fetching prices for {len(mints)} tokens...")
     prices = {}
+    symbols = {}
     
     # DexScreener allows querying individual tokens
     for mint in mints:
@@ -44,12 +65,27 @@ def get_token_prices(mints):
                     price = pairs[0].get('priceUsd')
                     if price:
                         prices[mint] = float(price)
+                    # Try to infer a symbol from common fields in the pair data
+                    pair0 = pairs[0]
+                    symbol = None
+                    # Common nested token object keys
+                    for key in ('baseToken', 'token', 'token0', 'token1'):
+                        part = pair0.get(key)
+                        if isinstance(part, dict):
+                            symbol = part.get('symbol') or part.get('name')
+                            if symbol:
+                                break
+                    # Some responses use top-level symbol fields
+                    if not symbol:
+                        symbol = pair0.get('baseTokenSymbol') or pair0.get('tokenSymbol') or pair0.get('pairBaseTokenSymbol')
+                    if symbol:
+                        symbols[mint] = symbol
             time.sleep(0.3)  # Rate limiting for DexScreener
         except Exception as e:
             print(f"Warning: Failed to fetch price for {mint[:8]}...: {e}")
             continue
     
-    return prices
+    return prices, symbols
 
 def call_with_retry(func, *args, max_retries=3, initial_delay=2, **kwargs):
     """Call a function with exponential backoff for rate limiting."""
@@ -143,7 +179,7 @@ def main(output_dir=None):
     # 5. Enrich with Metadata and Prices
     metadata = get_token_metadata()
     mints_to_price = list(set([t['mint'] for t in all_tokens]))
-    prices = get_token_prices(mints_to_price)
+    prices, price_symbols = get_token_prices(mints_to_price)
 
     results = []
     for t in all_tokens:
@@ -151,7 +187,8 @@ def main(output_dir=None):
         meta = metadata.get(mint, {})
         price = prices.get(mint, 0)
         
-        t['symbol'] = t.get('symbol') or meta.get('symbol', 'UNKNOWN')
+        # Resolve symbol: explicit symbol on token -> Jupiter/Solana tokenlist -> DexScreener inferred -> short mint fallback
+        t['symbol'] = t.get('symbol') or meta.get('symbol') or price_symbols.get(mint) or (mint[:8] + '...')
         t['name'] = t.get('name') or meta.get('name', 'Unknown Token')
         t['price'] = price
         t['value_usd'] = t['amount'] * price
