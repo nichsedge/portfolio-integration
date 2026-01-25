@@ -109,7 +109,7 @@ def main(output_dir=None):
     
     # Use provided output_dir or environment variable or current directory
     if output_dir is None:
-        output_dir = os.getenv("SOLANA_OUTPUT_DIR", ".")
+        output_dir = os.getenv("PORTFOLIO_DATA_DIR", ".")
 
     if not wallet_addr:
         print("Error: SOLANA_WALLET_ADDRESS not found in environment")
