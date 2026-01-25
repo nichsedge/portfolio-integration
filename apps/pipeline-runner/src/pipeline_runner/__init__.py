@@ -3,9 +3,9 @@
 Portfolio Integration Pipeline Runner
 
 Usage:
-    python -m pipeline_runner              # Run full pipeline
-    python -m pipeline_runner --fetch-only # Just fetch raw data
-    python -m pipeline_runner --integrate  # Just integrate
+    uv run pipeline_runner              # Run full pipeline
+    uv run pipeline_runner --fetch-only # Just fetch raw data
+    uv run pipeline_runner --integrate  # Just integrate
 
 Environment Variables:
     PORTFOLIO_DATA_DIR - Custom data directory (default: /home/al/Projects/.data/portfolio)

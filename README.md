@@ -45,10 +45,7 @@ cd ../..
 export PORTFOLIO_DATA_DIR=/path/to/your/data
 
 # Run full pipeline
-python -m apps.pipeline_runner.src.main
-
-# Or just:
-python -m pipeline_runner
+uv run pipeline_runner
 
 # Options:
 # --fetch-only    # Just fetch raw data

@@ -20,13 +20,13 @@ cd packages/debank-scraper && npm install
 ### Running the Pipeline
 ```bash
 # Run full pipeline (fetch + transform + integrate)
-python -m pipeline_runner
+uv run pipeline_runner
 
 # Fetch only (no transformation)
-python -m pipeline_runner --fetch-only
+uv run pipeline_runner --fetch-only
 
 # Transform and integrate only (skip fetching)
-python -m pipeline_runner --integrate
+uv run pipeline_runner --integrate
 
 # Run individual fetchers
 cd packages/ksei-client && uv run examples/fetch_and_dump_portfolios.py
