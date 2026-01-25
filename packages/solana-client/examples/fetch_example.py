@@ -12,7 +12,6 @@ if __name__ == "__main__":
     # Check if wallet address is set
     if not os.getenv("SOLANA_WALLET_ADDRESS"):
         print("Please set SOLANA_WALLET_ADDRESS in your .env file")
-        print("Example: SOLANA_WALLET_ADDRESS=6VZMafUCnkGQ8EeYgMDFsNFwEwJPkerVtP2DzFmokhus")
         exit(1)
     
     # Run the fetcher

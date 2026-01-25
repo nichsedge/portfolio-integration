@@ -73,6 +73,10 @@ def main():
         binance_path = repo_root / "packages/binance-client"
         run_step("Binance", str(binance_path), ["uv", "run", "ccxt_balance.py"])
 
+        # Solana
+        solana_path = repo_root / "packages/solana-client"
+        run_step("Solana", str(solana_path), ["uv", "run", "solana-fetch"])
+
     if not args.fetch_only:
         # Step 2: Transform Data
         print("--- Step 2: Transform Data ---")
