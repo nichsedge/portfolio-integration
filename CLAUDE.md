@@ -2,150 +2,111 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Overview
+## Architecture Overview
 
-This is a Python monorepo for integrating portfolio data from multiple financial sources (KSEI, DeBank, Binance, Solana, Hyperliquid). It uses `uv` for Python package management and follows a modular, package-based architecture.
+This is a Python monorepo managed with `uv` that implements a 3-stage ETL pipeline for aggregating financial portfolio data from multiple platforms:
 
-## Development Commands
+1. **Extract:** Fetch raw data from sources (KSEI, DeBank, Binance, Alchemy, Solana, QAZWA, Hyperliquid)
+2. **Transform:** Clean and filter each source into a curated format
+3. **Load:** Integrate all sources into a unified portfolio CSV
 
-### Setup
-```bash
-# Install all Python dependencies
-uv sync
+### Workspace Structure
 
-# Install Node.js dependencies for DeBank scraper
-cd packages/debank-scraper && npm install
+```
+packages/          # Independent uv packages
+├── ksei-client/   # Indonesian securities API (Python)
+├── debank-scraper/# DeFi portfolio (Node.js/Playwright)
+├── binance-client/# Crypto exchange via CCXT (Python)
+├── alchemy-client/# Solana token holdings (Python)
+├── solana-client/ # Solana blockchain RPC (Python)
+├── qazwa-scraper/ # Portfolio scraper (Node.js/Playwright)
+├── transform-core/# Shared utilities (data dir resolution, parsing)
+└── portfolio-app/ # Transformers + integrators
+
+apps/
+└── pipeline-runner/ # Main pipeline orchestrator
 ```
 
-### Running the Pipeline
+When working across packages, use `sys.path.insert(0, str(repo_root / "packages"))` to enable imports (see pipeline_runner/__init__.py:22). REPO_ROOT is computed as `Path(__file__).resolve().parents[4]` from the pipeline_runner.
+
+## Common Commands
+
 ```bash
+# Install/update dependencies
+uv sync
+cd packages/debank-scraper && npm install && cd ../..
+
 # Run full pipeline (fetch + transform + integrate)
 uv run pipeline_runner
 
-# Fetch only (no transformation)
-uv run pipeline_runner --fetch-only
+# Pipeline options
+uv run pipeline_runner --fetch-only   # Only fetch raw data
+uv run pipeline_runner --integrate    # Skip fetching, just transform/integrate
 
-# Transform and integrate only (skip fetching)
-uv run pipeline_runner --integrate
-
-# Run individual fetchers
+# Individual fetchers
 cd packages/ksei-client && uv run examples/fetch_and_dump_portfolios.py
 cd packages/debank-scraper && npm run scrape
-cd packages/binance-client && uv run ccxt_balance.py
-cd packages/alchemy-client && uv run alchemy-fetch
+cd packages/binance-client && uv run binance-fetch
+uv run alchemy-fetch  # From repo root
+
+# Data directory handling
+export PORTFOLIO_DATA_DIR=/path/to/data  # Override default data directory
 ```
 
-### Data Directory
-Set custom data directory via environment variable:
-```bash
-export PORTFOLIO_DATA_DIR=/path/to/your/data
-```
-Default: `{repo_root}/data`
+## Data Pipeline File Conventions
 
-## Architecture
+All data files use date-based naming in the configured data directory (from `PORTFOLIO_DATA_DIR` env var or `data/` default):
 
-### Monorepo Structure
-- **`packages/`** - Independent packages (clients, transformers, shared utilities)
-- **`apps/`** - Entry points and orchestration
-- **`data/`** - Pipeline output (git-ignored)
+- Raw output: `YYYY-MM-DD_raw_<source>.json`
+- Curated output: `YYYY-MM-DD_curated_<source>.json`
+- Final integrated: `YYYY-MM-DD_portfolio.csv`
 
-### Key Packages
-- **`transform-core`** - Shared utilities (`get_data_dir()`, `parse_usd()`, `FILTER_THRESHOLDS`)
-- **`portfolio-app`** - Contains transformers and integrators
-- **`alchemy-client`** - Fetcher package for Solana holdings via Alchemy
-- **`debank-scraper`** - Node.js Playwright-based scraper
-- **`pipeline-runner`** - Orchestrates the entire pipeline
+The standard integration schema is:
+- `source` - Data source name
+- `category` - Asset category (equity, crypto, defi, etc.)
+- `asset` - Asset name/symbol
+- `currency` - Asset currency
+- `amount` - Quantity held
+- `value_idr` - Value in IDR
+- `value_usd` - Value in USD
+- `account` - Account identifier
+- `details` - Additional metadata
 
-### Data Pipeline Flow
+## Adding a New Data Source
 
-The pipeline follows a three-stage transformation:
+Follow the standardized fetcher package pattern:
 
-1. **Fetch (Raw)** - `{YYYY-MM-DD}_raw_{source}.json`
-   - Each client package fetches data from its source
-   - Output: Raw JSON files with all data
+1. **Create package structure** under `packages/<source>-client/` with:
+   - `pyproject.toml` with `[project.scripts].<source>-fetch` entrypoint
+   - `src/<source>_client/fetcher.py` with `main(output_dir=None)` function
+   - Output file naming: `{current_date}_raw_<source>.json`
 
-2. **Transform (Curated)** - `{YYYY-MM-DD}_curated_{source}.json`
-   - Transformers in `portfolio-app/transformers/` filter and clean data
-   - Apply `FILTER_THRESHOLDS` from `transform-core/constants.py`
-   - Output: Cleaned JSON files
+2. **Create transformer** in `packages/portfolio-app/transformers/<source>_transform.py`:
+   - Read raw `{date}_raw_<source>.json`
+   - Parse using `transform_core.utils.get_data_dir()` for paths
+   - Filter using `FILTER_THRESHOLDS` from transform_core (if needed)
+   - Output `{date}_curated_<source>.json`
 
-3. **Integrate (Portfolio)** - `{YYYY-MM-DD}_portfolio.csv`
-   - Integrator in `portfolio-app/integrators/portfolio_integration.py`
-   - Standardizes all sources into unified CSV format
-   - Output: Single CSV with standardized columns
+3. **Add integration function** in `packages/portfolio-app/integrators/portfolio_integration.py`:
+   - `standardize_<source>_data()` returns list of dicts matching the schema
+   - Register in main integration flow
 
-### Pipeline Orchestration
+4. **Add to pipeline** in `apps/pipeline-runner/src/pipeline_runner/__init__.py`:
+   - Add fetch step in Step 1
+   - Add transform file in `transform_files` list in Step 2
 
-The `pipeline-runner` app (`apps/pipeline-runner/src/pipeline_runner/__init__.py`) orchestrates the entire flow:
-- Calls each fetcher's `main()` function with `output_dir` parameter
-- Executes transformers sequentially
-- Runs final integration
+## Environment Variables
 
-### Workspace Dependencies
+- `PORTFOLIO_DATA_DIR` (or `DATA_DIR`) - Data directory path
+- `KSEI_USERNAME` / `KSEI_PASSWORD` - KSEI credentials
+- `EVM_ADDRESS` - DeBank wallet address
+- `BINANCE_API_KEY` / `BINANCE_API_SECRET` - Binance API
+- `SOLANA_WALLET_ADDRESS` / `RPC_URL` - Solana configuration
+- `WALLET_ADDRESS` / `ALCHEMY_API_KEY` - Alchemy configuration
 
-All packages use workspace references in `pyproject.toml`:
-```toml
-[tool.uv.sources]
-transform-core = { workspace = true }
-portfolio-app = { workspace = true }
-```
+## Key Implementation Details
 
-The root `pyproject.toml` defines workspace members:
-```toml
-[tool.uv.workspace]
-members = ["packages/*", "apps/*"]
-```
-
-## Adding New Data Sources
-
-Follow the standardized fetcher package pattern documented in README.md:
-
-1. Create package in `packages/{source}-client/`
-2. Implement `main(output_dir=None)` in `src/{source}_client/__init__.py`
-3. Output to `{YYYY-MM-DD}_raw_{source}.json`
-4. Add workspace dependency to `apps/pipeline-runner/pyproject.toml`
-5. Create transformer in `packages/portfolio-app/src/portfolio_app/transformers/{source}_transform.py`
-6. Update integrator to handle new source
-
-See `packages/alchemy-client/` for reference implementation.
-
-## Important Conventions
-
-### File Naming
-- Raw data: `{YYYY-MM-DD}_raw_{source}.json`
-- Curated data: `{YYYY-MM-DD}_curated_{source}.json`
-- Integrated portfolio: `{YYYY-MM-DD}_portfolio.csv`
-
-### Data Access
-Always use `get_data_dir()` from `transform_core` instead of hardcoding paths:
-```python
-from transform_core import get_data_dir
-data_dir = get_data_dir()  # Respects PORTFOLIO_DATA_DIR env var
-```
-
-### Transformers Pattern
-Each transformer should:
-- Import `get_data_dir()` and relevant constants from `transform_core`
-- Load from `{date}_raw_{source}.json`
-- Apply filtering based on `FILTER_THRESHOLDS`
-- Save to `{date}_curated_{source}.json`
-- Be executable as `__main__`
-
-### Integration Format
-The integrator standardizes all sources into:
-```python
-{
-    "source": str,      # "KSEI", "DeBank", "Binance", etc.
-    "category": str,    # "Cash", "Equity", "Crypto", etc.
-    "asset": str,       # Asset name/symbol
-    "currency": str,    # "IDR", "USD", etc.
-    "amount": float,    # Quantity
-    "value_idr": float, # Value in IDR (or None)
-    "value_usd": float, # Value in USD (or None)
-    "account": str,     # Account identifier
-    "details": str      # Additional context
-}
-```
-
-## Python Version
-Requires Python 3.12+ (specified in all `pyproject.toml` files)
+- **Data directory resolution**: All packages use `transform_core.utils.get_data_dir()` which checks `PORTFOLIO_DATA_DIR` → `DATA_DIR` → default `REPO_ROOT/data`
+- **Date handling**: All files use `datetime.now().strftime("%Y-%m-%d")` for consistent naming
+- **Pipelines**: The pipeline-runner executes fetchers as subprocesses for isolation; transforms run via direct Python execution
+- **Node.js scrapers**: DeBank and QAZWA scrapers use Playwright and `npm run scrape` commands
