@@ -218,9 +218,9 @@ def fetch_<source>_entrypoint():
 - **Location:** Standardized data directory (default: `data/`)
 - **Format:** JSON with consistent structure
 
-### Example: Solana Client
+### Example: Alchemy Client
 
-See `packages/solana-client/` for a complete reference implementation following this pattern.
+See `packages/alchemy-client/` for a complete reference implementation following this pattern.
 ```
 
 ## Environment Variables

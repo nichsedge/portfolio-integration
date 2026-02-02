@@ -73,9 +73,10 @@ def main():
         binance_path = repo_root / "packages/binance-client"
         run_step("Binance", str(binance_path), ["uv", "run", "binance-fetch"])
 
-        # Solana
-        solana_path = repo_root / "packages/solana-client"
-        run_step("Solana", str(solana_path), ["uv", "run", "solana-fetch"])
+        # Alchemy
+        alchemy_path = repo_root / "packages/alchemy-client"
+        if alchemy_path.exists():
+            run_step("Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"])
 
     if not args.fetch_only:
         # Step 2: Transform Data
@@ -88,7 +89,7 @@ def main():
             ("KSEI transform", portfolio_app_path / "src/portfolio_app/transformers/ksei_transform.py"),
             ("DeBank transform", portfolio_app_path / "src/portfolio_app/transformers/debank_transform.py"),
             ("Binance transform", portfolio_app_path / "src/portfolio_app/transformers/binance_transform.py"),
-            ("Solana transform", portfolio_app_path / "src/portfolio_app/transformers/solana_transform.py"),
+            ("Alchemy transform", portfolio_app_path / "src/portfolio_app/transformers/alchemy_transform.py"),
         ]
 
         for name, script_path in transform_files:
@@ -119,20 +120,23 @@ def integrate_entrypoint():
     main()
 
 
-def fetch_solana_entrypoint():
-    """Entry point for Solana fetch command."""
-    from solana_client import main as solana_main
-    
+
+
+
+def fetch_alchemy_entrypoint():
+    """Entry point for Alchemy fetch command."""
+    from alchemy_client import main as alchemy_main
+
     # Get data directory
     repo_root = Path(__file__).resolve().parents[4]
     default_data_dir = repo_root / "data"
     data_dir = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or str(default_data_dir)
-    
-    print("🚀 Fetching Solana holdings...")
+
+    print("🚀 Fetching Alchemy holdings...")
     print(f"Data directory: {data_dir}\n")
-    
-    # Call solana fetcher with output directory
-    solana_main(output_dir=data_dir)
+
+    # Call alchemy fetcher with output directory
+    alchemy_main(output_dir=data_dir)
 
 
 if __name__ == "__main__":
