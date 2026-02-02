@@ -32,7 +32,7 @@ uv run pipeline_runner --integrate
 cd packages/ksei-client && uv run examples/fetch_and_dump_portfolios.py
 cd packages/debank-scraper && npm run scrape
 cd packages/binance-client && uv run ccxt_balance.py
-cd packages/solana-client && uv run examples/fetch_holdings.py
+cd packages/alchemy-client && uv run alchemy-fetch
 ```
 
 ### Data Directory
@@ -52,7 +52,7 @@ Default: `{repo_root}/data`
 ### Key Packages
 - **`transform-core`** - Shared utilities (`get_data_dir()`, `parse_usd()`, `FILTER_THRESHOLDS`)
 - **`portfolio-app`** - Contains transformers and integrators
-- **`{source}-client`** - Fetcher packages (e.g., `ksei-client`, `binance-client`, `solana-client`)
+- **`alchemy-client`** - Fetcher package for Solana holdings via Alchemy
 - **`debank-scraper`** - Node.js Playwright-based scraper
 - **`pipeline-runner`** - Orchestrates the entire pipeline
 
@@ -107,7 +107,7 @@ Follow the standardized fetcher package pattern documented in README.md:
 5. Create transformer in `packages/portfolio-app/src/portfolio_app/transformers/{source}_transform.py`
 6. Update integrator to handle new source
 
-See `packages/solana-client/` for reference implementation.
+See `packages/alchemy-client/` for reference implementation.
 
 ## Important Conventions
 

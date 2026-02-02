@@ -1,5 +1,8 @@
 [tool.uv.workspace]
-members = ["packages/*", "apps/*"]
+members = [
+    "packages/*",
+    "apps/*"
+]
 
 [tool.uv]
 managed = true
