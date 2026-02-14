@@ -45,7 +45,7 @@ cd ../..
 export PORTFOLIO_DATA_DIR=/path/to/your/data
 
 # Run full pipeline
-uv run pipeline_runner
+uv run run-all
 
 # Options:
 # --fetch-only    # Just fetch raw data
@@ -191,7 +191,7 @@ dependencies = [
 <source>-client = { workspace = true }
 
 [project.scripts]
-fetch-<source> = "pipeline_runner:fetch_<source>_entrypoint"
+fetch-<source> = "run-all:fetch_<source>_entrypoint"
 ```
 
 **Add entrypoint to `apps/pipeline-runner/src/pipeline_runner/__init__.py`:**
