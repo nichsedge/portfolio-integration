@@ -35,15 +35,12 @@ def main(output_dir=None):
     if output_dir is None:
         output_dir = os.getenv("PORTFOLIO_DATA_DIR", ".")
 
-    url = f"https://api.g.alchemy.com/data/v1/{alchemy_api_key}/assets/tokens/by-address"
+    url = (
+        f"https://api.g.alchemy.com/data/v1/{alchemy_api_key}/assets/tokens/by-address"
+    )
 
     payload = {
-        "addresses": [
-            {
-                "address": wallet_address,
-                "networks": ["solana-mainnet"]
-            }
-        ]
+        "addresses": [{"address": wallet_address, "networks": ["solana-mainnet"]}]
     }
     headers = {"Content-Type": "application/json"}
 
@@ -73,7 +70,7 @@ def main(output_dir=None):
         decimals = meta.get("decimals", 9) or 9
 
         # Calculate human-readable balance
-        balance_adj = raw_balance / (10 ** decimals)
+        balance_adj = raw_balance / (10**decimals)
 
         # Get USD price if available
         value_usd = None
@@ -84,16 +81,18 @@ def main(output_dir=None):
                     value_usd = balance_adj * price_value
                     break
 
-        results.append({
-            "address": token.get("address"),
-            "network": token.get("network"),
-            "tokenAddress": token.get("tokenAddress"),
-            "balance": balance_adj,
-            "symbol": meta.get("symbol") or "SOL",
-            "name": meta.get("name"),
-            "decimals": decimals,
-            "value_usd": value_usd,
-        })
+        results.append(
+            {
+                "address": token.get("address"),
+                "network": token.get("network"),
+                "tokenAddress": token.get("tokenAddress"),
+                "balance": balance_adj,
+                "symbol": meta.get("symbol") or "SOL",
+                "name": meta.get("name"),
+                "decimals": decimals,
+                "value_usd": value_usd,
+            }
+        )
 
     # Sort by value_usd if available
     results.sort(key=lambda x: x.get("value_usd") or 0, reverse=True)

@@ -44,11 +44,11 @@ def parse_usd(value: Union[str, int, float, None]) -> float:
         return 0.0
     if isinstance(value, (int, float)):
         return float(value)
-    
-    val_str = str(value).replace(',', '').strip()
-    if '<' in val_str:
+
+    val_str = str(value).replace(",", "").strip()
+    if "<" in val_str:
         return 0.0
-        
+
     # Extract numeric part (e.g., from '472.16 USDC' or '$472.16')
     match = re.search(r"[-+]?\d*\.?\d+", val_str)
     if match:

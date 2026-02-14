@@ -19,27 +19,29 @@ def clean_alchemy_data(raw_data):
 
         # Only include tokens with non-zero balance
         if balance > 0:
-            assets.append({
-                "address": token.get("address"),
-                "network": token.get("network"),
-                "token_address": token.get("tokenAddress", 'SOL'),
-                "symbol": token.get("symbol", "UNKNOWN"),
-                "name": token.get("name", "Unknown Token"),
-                "balance": balance,
-                "decimals": token.get("decimals"),
-                "value_usd": value_usd,
-            })
+            assets.append(
+                {
+                    "address": token.get("address"),
+                    "network": token.get("network"),
+                    "token_address": token.get("tokenAddress", "SOL"),
+                    "symbol": token.get("symbol", "UNKNOWN"),
+                    "name": token.get("name", "Unknown Token"),
+                    "balance": balance,
+                    "decimals": token.get("decimals"),
+                    "value_usd": value_usd,
+                }
+            )
 
     return {
         "timestamp": pendulum.now().to_iso8601_string(),
         "total_usd": sum(asset.get("value_usd") or 0 for asset in assets),
-        "assets": assets
+        "assets": assets,
     }
 
 
 if __name__ == "__main__":
     # Main execution
-    td = pendulum.now().format('YYYY-MM-DD')
+    td = pendulum.now().format("YYYY-MM-DD")
     data_dir = get_data_dir()
     raw_path = data_dir / f"{td}_raw_alchemy.json"
     curated_path = data_dir / f"{td}_curated_alchemy.json"

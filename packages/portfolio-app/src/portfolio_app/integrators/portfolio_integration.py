@@ -20,6 +20,7 @@ from portfolio_app.transformers.ksei_transform import clean_json
 from portfolio_app.transformers.debank_transform import extract_relevant
 from transform_core import get_data_dir, parse_usd
 
+
 def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert KSEI data to standardized format."""
     standardized = []
@@ -33,66 +34,77 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 value_usd = None
             else:
                 value_idr = None
-                value_usd = entry.get("saldo", 0)  # For non-IDR currencies, use original saldo as USD
+                value_usd = entry.get(
+                    "saldo", 0
+                )  # For non-IDR currencies, use original saldo as USD
 
-            standardized.append({
-                "source": "KSEI",
-                "category": "Cash",
-                "asset": entry.get("bank", "Unknown"),
-                "currency": currency,
-                "amount": entry.get("saldo", 0),
-                "value_idr": value_idr,
-                "value_usd": value_usd,
-                "account": entry.get("rekening", ""),
-                "details": f"Bank: {entry.get('bank', '')}, Account: {entry.get('rekening', '')}"
-            })
+            standardized.append(
+                {
+                    "source": "KSEI",
+                    "category": "Cash",
+                    "asset": entry.get("bank", "Unknown"),
+                    "currency": currency,
+                    "amount": entry.get("saldo", 0),
+                    "value_idr": value_idr,
+                    "value_usd": value_usd,
+                    "account": entry.get("rekening", ""),
+                    "details": f"Bank: {entry.get('bank', '')}, Account: {entry.get('rekening', '')}",
+                }
+            )
 
     # Process equity
     if "equity" in ksei_data:
         for entry in ksei_data["equity"].get("data", []):
-            standardized.append({
-                "source": "KSEI",
-                "category": "Equity",
-                "asset": entry.get("efek", "Unknown").split(" - ")[0],
-                "currency": "IDR",
-                "amount": entry.get("jumlah", 0),
-                "value_idr": entry.get("nilaiInvestasi", 0),
-                "value_usd": None,
-                "account": entry.get("rekening", ""),
-                "details": f"Stock: {entry.get('efek', '')}, Broker: {entry.get('partisipan', '')}, Price: {entry.get('harga', 0)}"
-            })
+            standardized.append(
+                {
+                    "source": "KSEI",
+                    "category": "Equity",
+                    "asset": entry.get("efek", "Unknown").split(" - ")[0],
+                    "currency": "IDR",
+                    "amount": entry.get("jumlah", 0),
+                    "value_idr": entry.get("nilaiInvestasi", 0),
+                    "value_usd": None,
+                    "account": entry.get("rekening", ""),
+                    "details": f"Stock: {entry.get('efek', '')}, Broker: {entry.get('partisipan', '')}, Price: {entry.get('harga', 0)}",
+                }
+            )
 
     # Process mutual funds
     if "mutual_fund" in ksei_data:
         for entry in ksei_data["mutual_fund"].get("data", []):
-            standardized.append({
-                "source": "KSEI",
-                "category": "Mutual Fund",
-                "asset": entry.get("efek", "Unknown"),
-                "currency": "IDR",
-                "amount": entry.get("jumlah", 0),
-                "value_idr": entry.get("nilaiInvestasi", 0),
-                "value_usd": None,
-                "account": entry.get("rekening", ""),
-                "details": f"Fund: {entry.get('efek', '')}, Manager: {entry.get('partisipan', '')}"
-            })
+            standardized.append(
+                {
+                    "source": "KSEI",
+                    "category": "Mutual Fund",
+                    "asset": entry.get("efek", "Unknown"),
+                    "currency": "IDR",
+                    "amount": entry.get("jumlah", 0),
+                    "value_idr": entry.get("nilaiInvestasi", 0),
+                    "value_usd": None,
+                    "account": entry.get("rekening", ""),
+                    "details": f"Fund: {entry.get('efek', '')}, Manager: {entry.get('partisipan', '')}",
+                }
+            )
 
     # Process bonds
     if "bond" in ksei_data:
         for entry in ksei_data["bond"].get("data", []):
-            standardized.append({
-                "source": "KSEI",
-                "category": "Bond",
-                "asset": entry.get("efek", "Unknown"),
-                "currency": "IDR",
-                "amount": entry.get("jumlah", 0),
-                "value_idr": entry.get("nilaiInvestasi", 0),
-                "value_usd": None,
-                "account": entry.get("rekening", ""),
-                "details": f"Bond: {entry.get('efek', '')}, Issuer: {entry.get('partisipan', '')}"
-            })
+            standardized.append(
+                {
+                    "source": "KSEI",
+                    "category": "Bond",
+                    "asset": entry.get("efek", "Unknown"),
+                    "currency": "IDR",
+                    "amount": entry.get("jumlah", 0),
+                    "value_idr": entry.get("nilaiInvestasi", 0),
+                    "value_usd": None,
+                    "account": entry.get("rekening", ""),
+                    "details": f"Bond: {entry.get('efek', '')}, Issuer: {entry.get('partisipan', '')}",
+                }
+            )
 
     return standardized
+
 
 def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert DeBank data to standardized format."""
@@ -101,21 +113,25 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
     # Process wallets
     for wallet in debank_data.get("wallets", []):
         usd_value = parse_usd(wallet.get("USD Value", 0))
-        standardized.append({
-            "source": "DeBank",
-            "category": "Crypto Wallet",
-            "asset": wallet.get("chain", "Unknown"),
-            "currency": "USD",
-            "amount": 1,  # Wallets don't have amount, just value
-            "value_idr": None,
-            "value_usd": usd_value,
-            "account": wallet.get("Address", ""),
-            "details": f"Wallet: {wallet.get('name', '')}, Chain: {wallet.get('chain', '')}"
-        })
+        standardized.append(
+            {
+                "source": "DeBank",
+                "category": "Crypto Wallet",
+                "asset": wallet.get("chain", "Unknown"),
+                "currency": "USD",
+                "amount": 1,  # Wallets don't have amount, just value
+                "value_idr": None,
+                "value_usd": usd_value,
+                "account": wallet.get("Address", ""),
+                "details": f"Wallet: {wallet.get('name', '')}, Chain: {wallet.get('chain', '')}",
+            }
+        )
 
     # Process protocols
     for protocol in debank_data.get("protocols", []):
-        protocol_name = protocol.get("name") or f"Protocol {protocol.get('id', 'Unknown')}"
+        protocol_name = (
+            protocol.get("name") or f"Protocol {protocol.get('id', 'Unknown')}"
+        )
         protocol_chain = protocol.get("chain") or "Unknown"
         protocol_value = parse_usd(protocol.get("usdValue", 0))
 
@@ -124,31 +140,35 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
             usd_value = parse_usd(entry.get("USD Value", 0))
             if usd_value >= 10:
                 token = entry.get("token", {})
-                standardized.append({
-                    "source": "DeBank",
-                    "category": "DeFi Protocol",
-                    "asset": token.get("symbol", "Unknown"),
-                    "currency": "USD",
-                    "amount": float(entry.get("amount", 0)),
-                    "value_idr": None,
-                    "value_usd": usd_value,
-                    "account": f"{protocol_name} on {protocol_chain}",
-                    "details": f"Protocol: {protocol_name}, Chain: {protocol_chain}, Token: {token.get('symbol', '')}"
-                })
+                standardized.append(
+                    {
+                        "source": "DeBank",
+                        "category": "DeFi Protocol",
+                        "asset": token.get("symbol", "Unknown"),
+                        "currency": "USD",
+                        "amount": float(entry.get("amount", 0)),
+                        "value_idr": None,
+                        "value_usd": usd_value,
+                        "account": f"{protocol_name} on {protocol_chain}",
+                        "details": f"Protocol: {protocol_name}, Chain: {protocol_chain}, Token: {token.get('symbol', '')}",
+                    }
+                )
 
         # If protocol has no data entries but has value, add it as a single entry
         if not protocol.get("data") and protocol_value >= 10:
-            standardized.append({
-                "source": "DeBank",
-                "category": "DeFi Protocol",
-                "asset": "Unknown",
-                "currency": "USD",
-                "amount": 0.0,
-                "value_idr": None,
-                "value_usd": protocol_value,
-                "account": f"{protocol_name} on {protocol_chain}",
-                "details": f"Protocol: {protocol_name}, Chain: {protocol_chain}"
-            })
+            standardized.append(
+                {
+                    "source": "DeBank",
+                    "category": "DeFi Protocol",
+                    "asset": "Unknown",
+                    "currency": "USD",
+                    "amount": 0.0,
+                    "value_idr": None,
+                    "value_usd": protocol_value,
+                    "account": f"{protocol_name} on {protocol_chain}",
+                    "details": f"Protocol: {protocol_name}, Chain: {protocol_chain}",
+                }
+            )
 
     return standardized
 
@@ -163,17 +183,19 @@ def standardize_binance_data(binance_data: Dict[str, Any]) -> List[Dict[str, Any
         amount = asset.get("amount", 0)
         value_usd = asset.get("value_usd", 0)
 
-        standardized.append({
-            "source": "Binance",
-            "category": "Cryptocurrency",
-            "asset": asset_symbol,
-            "currency": "USD",
-            "amount": amount,
-            "value_idr": None,
-            "value_usd": value_usd,
-            "account": "Binance Main Account",
-            "details": f"Price: ${price_usd:,.2f}, Amount: {amount:,.8f}"
-        })
+        standardized.append(
+            {
+                "source": "Binance",
+                "category": "Cryptocurrency",
+                "asset": asset_symbol,
+                "currency": "USD",
+                "amount": amount,
+                "value_idr": None,
+                "value_usd": value_usd,
+                "account": "Binance Main Account",
+                "details": f"Price: ${price_usd:,.2f}, Amount: {amount:,.8f}",
+            }
+        )
 
     return standardized
 
@@ -185,21 +207,25 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
     for asset in alchemy_data.get("assets", []):
         asset_symbol = asset.get("symbol", "Unknown")
         name = asset.get("name", "Unknown Token")
-        price = asset.get("price", 0)  # Note: Alchemy curated data might have price, if not we fall back to 0
+        price = asset.get(
+            "price", 0
+        )  # Note: Alchemy curated data might have price, if not we fall back to 0
         amount = asset.get("balance", 0)
         value_usd = asset.get("value_usd", 0)
 
-        standardized.append({
-            "source": "Alchemy",
-            "category": "Cryptocurrency",
-            "asset": asset_symbol,
-            "currency": "USD",
-            "amount": amount,
-            "value_idr": None,
-            "value_usd": value_usd,
-            "account": "Alchemy Wallet",
-            "details": f"Token: {name}, Network: {asset.get('network', 'Unknown')}, Amount: {amount:,.8f}"
-        })
+        standardized.append(
+            {
+                "source": "Alchemy",
+                "category": "Cryptocurrency",
+                "asset": asset_symbol,
+                "currency": "USD",
+                "amount": amount,
+                "value_idr": None,
+                "value_usd": value_usd,
+                "account": "Alchemy Wallet",
+                "details": f"Token: {name}, Network: {asset.get('network', 'Unknown')}, Amount: {amount:,.8f}",
+            }
+        )
 
     return standardized
 
@@ -207,7 +233,7 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
 def main():
     """Main function to integrate KSEI and DeBank data into CSV."""
     # Get today's date
-    td = pendulum.now().format('YYYY-MM-DD')
+    td = pendulum.now().format("YYYY-MM-DD")
 
     # File paths
     data_dir = get_data_dir()
@@ -216,7 +242,6 @@ def main():
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
     alchemy_curated_path = data_dir / f"{td}_curated_alchemy.json"
     output_csv_path = data_dir / f"{td}_portfolio.csv"
-
 
     # Load KSEI and DeBank raw data
     with open(ksei_raw_path, "r", encoding="utf-8") as f:
@@ -257,15 +282,33 @@ def main():
     debank_standardized = standardize_debank_data(debank_clean)
 
     # Combine all data
-    all_data = ksei_standardized + debank_standardized + binance_standardized + alchemy_standardized
+    all_data = (
+        ksei_standardized
+        + debank_standardized
+        + binance_standardized
+        + alchemy_standardized
+    )
 
     # Sort by source, category, and asset
-    all_data.sort(key=lambda x: (str(x.get("source") or ""), str(x.get("category") or ""), str(x.get("asset") or "")))
+    all_data.sort(
+        key=lambda x: (
+            str(x.get("source") or ""),
+            str(x.get("category") or ""),
+            str(x.get("asset") or ""),
+        )
+    )
 
     # Write to CSV
     fieldnames = [
-        "source", "category", "asset", "currency", "amount",
-        "value_idr", "value_usd", "account", "details"
+        "source",
+        "category",
+        "asset",
+        "currency",
+        "amount",
+        "value_idr",
+        "value_usd",
+        "account",
+        "details",
     ]
 
     with open(output_csv_path, "w", newline="", encoding="utf-8") as f:
@@ -274,15 +317,22 @@ def main():
         writer.writerows(all_data)
 
     # Print summary
-    total_idr = sum(item["value_idr"] for item in all_data if item["value_idr"] is not None)
-    total_usd = sum(item["value_usd"] for item in all_data if item["value_usd"] is not None)
+    total_idr = sum(
+        item["value_idr"] for item in all_data if item["value_idr"] is not None
+    )
+    total_usd = sum(
+        item["value_usd"] for item in all_data if item["value_usd"] is not None
+    )
 
     print(f"Portfolio integration completed!")
     print(f"Output: {output_csv_path}")
     print(f"Total assets: {len(all_data)}")
 
     # Build sources list
-    sources_parts = [f"KSEI ({len(ksei_standardized)} items)", f"DeBank ({len(debank_standardized)} items)"]
+    sources_parts = [
+        f"KSEI ({len(ksei_standardized)} items)",
+        f"DeBank ({len(debank_standardized)} items)",
+    ]
     if binance_loaded:
         sources_parts.append(f"Binance ({len(binance_standardized)} items)")
     if alchemy_loaded:
@@ -326,6 +376,7 @@ def main():
 
         currency_str = " / ".join(currency_info)
         print(f"  {cat}: {data['count']} items, {currency_str}")
+
 
 if __name__ == "__main__":
     main()

@@ -2,6 +2,7 @@ import json
 import re
 from collections import defaultdict
 
+
 def parse_usd(value):
     """Convert strings like '$494.15' or '199.8499 USDC' to float."""
     if not value:
@@ -9,6 +10,7 @@ def parse_usd(value):
     value = str(value)
     match = re.search(r"[\d,.]+", value.replace(",", ""))
     return float(match.group().replace(",", "")) if match else 0.0
+
 
 def flatten_assets(data):
     assets = defaultdict(float)
@@ -28,6 +30,7 @@ def flatten_assets(data):
             assets[token] += usd_value
 
     return dict(assets)
+
 
 if __name__ == "__main__":
     # Load from JSON file

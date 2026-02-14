@@ -4,7 +4,9 @@ import pandas as pd
 
 
 def safe_name(name: str) -> str:
-    return "".join(c if c.isalnum() or c in (" ", "_", "-") else "_" for c in name).strip()
+    return "".join(
+        c if c.isalnum() or c in (" ", "_", "-") else "_" for c in name
+    ).strip()
 
 
 def infer_engine(ext: str) -> str | None:

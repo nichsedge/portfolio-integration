@@ -16,7 +16,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Any # Added for process dictionary
+from typing import Dict, Any  # Added for process dictionary
 
 # Add packages to path for imports
 repo_root = Path(__file__).resolve().parents[4]
@@ -44,7 +44,9 @@ def _run_blocking_step(name: str, pkg_path: str, command: list[str]) -> bool:
     return True
 
 
-def _start_non_blocking_step(name: str, pkg_path: str, command: list[str]) -> subprocess.Popen[Any]:
+def _start_non_blocking_step(
+    name: str, pkg_path: str, command: list[str]
+) -> subprocess.Popen[Any]:
     """Start a pipeline step subprocess for parallel execution."""
     print(f"Starting: {name}")
 
@@ -62,7 +64,7 @@ def _wait_for_steps(steps: Dict[str, subprocess.Popen[Any]]) -> bool:
     """Wait for all subprocesses to complete and log results. Returns False on any failure."""
     all_success = True
     results: Dict[str, Any] = {}
-    
+
     # Wait for all processes to finish and collect output
     for name, proc in steps.items():
         # communicate() waits for the process and collects output
@@ -91,23 +93,29 @@ def _wait_for_steps(steps: Dict[str, subprocess.Popen[Any]]) -> bool:
             # For successful runs, optionally print the first line of output for context
             first_line = res["stdout"].splitlines()[0] if res["stdout"] else ""
             if first_line:
-                 print(f"  > {first_line.strip()}")
-            
-    print() # Final newline for separation
+                print(f"  > {first_line.strip()}")
+
+    print()  # Final newline for separation
     return all_success
 
 
 def main():
     parser = argparse.ArgumentParser(description="Portfolio Integration Pipeline")
     parser.add_argument("--fetch-only", action="store_true", help="Only fetch raw data")
-    parser.add_argument("--integrate", action="store_true", help="Skip fetching, just integrate")
+    parser.add_argument(
+        "--integrate", action="store_true", help="Skip fetching, just integrate"
+    )
     args = parser.parse_args()
 
     # Get repo root path
     repo_root = Path(__file__).resolve().parents[4]
     default_data_dir = repo_root / "data"
 
-    data_dir = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or str(default_data_dir)
+    data_dir = (
+        os.getenv("PORTFOLIO_DATA_DIR")
+        or os.getenv("DATA_DIR")
+        or str(default_data_dir)
+    )
 
     print("🚀 Portfolio Integration Pipeline")
     print(f"Data directory: {data_dir}\n")
@@ -121,7 +129,9 @@ def main():
         # KSEI
         ksei_path = repo_root / "packages/ksei-client"
         processes["KSEI"] = _start_non_blocking_step(
-            "KSEI", str(ksei_path), ["uv", "run", "examples/fetch_and_dump_portfolios.py"]
+            "KSEI",
+            str(ksei_path),
+            ["uv", "run", "examples/fetch_and_dump_portfolios.py"],
         )
 
         # DeBank (Node.js)
@@ -142,12 +152,11 @@ def main():
             processes["Alchemy"] = _start_non_blocking_step(
                 "Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"]
             )
-        
+
         # Wait for all fetch steps
         if not _wait_for_steps(processes):
             print("\nPipeline failed during data fetching. Aborting.")
             sys.exit(1)
-
 
     if not args.fetch_only:
         # Step 2: Transform Data
@@ -157,15 +166,32 @@ def main():
 
         # Transform - execute python files directly
         transform_files = [
-            ("KSEI transform", portfolio_app_path / "src/portfolio_app/transformers/ksei_transform.py"),
-            ("DeBank transform", portfolio_app_path / "src/portfolio_app/transformers/debank_transform.py"),
-            ("Binance transform", portfolio_app_path / "src/portfolio_app/transformers/binance_transform.py"),
-            ("Alchemy transform", portfolio_app_path / "src/portfolio_app/transformers/alchemy_transform.py"),
+            (
+                "KSEI transform",
+                portfolio_app_path / "src/portfolio_app/transformers/ksei_transform.py",
+            ),
+            (
+                "DeBank transform",
+                portfolio_app_path
+                / "src/portfolio_app/transformers/debank_transform.py",
+            ),
+            (
+                "Binance transform",
+                portfolio_app_path
+                / "src/portfolio_app/transformers/binance_transform.py",
+            ),
+            (
+                "Alchemy transform",
+                portfolio_app_path
+                / "src/portfolio_app/transformers/alchemy_transform.py",
+            ),
         ]
 
         for name, script_path in transform_files:
             if script_path.exists():
-                if not _run_blocking_step(name, str(script_path.parent), [sys.executable, str(script_path)]):
+                if not _run_blocking_step(
+                    name, str(script_path.parent), [sys.executable, str(script_path)]
+                ):
                     print(f"\nPipeline failed during {name}. Aborting.")
                     sys.exit(1)
             else:
@@ -173,8 +199,15 @@ def main():
 
         # Step 3: Integrate
         print("--- Step 3: Integrate ---")
-        integrator_path = portfolio_app_path / "src/portfolio_app/integrators/portfolio_integration.py"
-        if not _run_blocking_step("Integration", str(integrator_path.parent), [sys.executable, str(integrator_path)]):
+        integrator_path = (
+            portfolio_app_path
+            / "src/portfolio_app/integrators/portfolio_integration.py"
+        )
+        if not _run_blocking_step(
+            "Integration",
+            str(integrator_path.parent),
+            [sys.executable, str(integrator_path)],
+        ):
             print("\nPipeline failed during integration. Aborting.")
             sys.exit(1)
 
@@ -184,6 +217,7 @@ def main():
 def fetch_entrypoint():
     """Entry point for fetch command."""
     import sys
+
     sys.argv = [sys.argv[0], "--fetch-only"]
     main()
 
@@ -191,11 +225,9 @@ def fetch_entrypoint():
 def integrate_entrypoint():
     """Entry point for integrate command."""
     import sys
+
     sys.argv = [sys.argv[0], "--integrate"]
     main()
-
-
-
 
 
 def fetch_alchemy_entrypoint():
@@ -205,7 +237,11 @@ def fetch_alchemy_entrypoint():
     # Get data directory
     repo_root = Path(__file__).resolve().parents[4]
     default_data_dir = repo_root / "data"
-    data_dir = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or str(default_data_dir)
+    data_dir = (
+        os.getenv("PORTFOLIO_DATA_DIR")
+        or os.getenv("DATA_DIR")
+        or str(default_data_dir)
+    )
 
     print("🚀 Fetching Alchemy holdings...")
     print(f"Data directory: {data_dir}\n")

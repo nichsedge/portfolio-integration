@@ -47,7 +47,12 @@ async def main():
     username = os.getenv("KSEI_USERNAME")
     password = os.getenv("KSEI_PASSWORD")
     auth_path = os.getenv("KSEI_AUTH_PATH", "./auth")
-    output_dir = os.getenv("KSEI_OUTPUT_DIR") or os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or "./data"
+    output_dir = (
+        os.getenv("KSEI_OUTPUT_DIR")
+        or os.getenv("PORTFOLIO_DATA_DIR")
+        or os.getenv("DATA_DIR")
+        or "./data"
+    )
     write_output = os.getenv("KSEI_WRITE_OUTPUT", "1") not in ("0", "false", "False")
 
     if not username or not password:

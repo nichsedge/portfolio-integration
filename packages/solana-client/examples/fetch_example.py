@@ -8,11 +8,11 @@ from solana_client import main
 if __name__ == "__main__":
     # Load environment variables from .env file
     load_dotenv()
-    
+
     # Check if wallet address is set
     if not os.getenv("SOLANA_WALLET_ADDRESS"):
         print("Please set SOLANA_WALLET_ADDRESS in your .env file")
         exit(1)
-    
+
     # Run the fetcher
     main()

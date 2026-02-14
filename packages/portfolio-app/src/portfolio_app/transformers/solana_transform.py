@@ -8,6 +8,7 @@ repo_root = Path(__file__).parents[4]
 sys.path.insert(0, str(repo_root / "packages"))
 from transform_core import get_data_dir
 
+
 def clean_solana_data(raw_data):
     """Clean and extract relevant Solana data."""
     return {
@@ -21,15 +22,16 @@ def clean_solana_data(raw_data):
                 "amount": token.get("amount"),
                 "price": token.get("price"),
                 "value_usd": token.get("value_usd"),
-                "program_id": token.get("program_id")
+                "program_id": token.get("program_id"),
             }
             for token in raw_data
-        ]
+        ],
     }
+
 
 if __name__ == "__main__":
     # Main execution
-    td = pendulum.now().format('YYYY-MM-DD')
+    td = pendulum.now().format("YYYY-MM-DD")
     data_dir = get_data_dir()
     raw_path = data_dir / f"{td}_raw_solana.json"
     curated_path = data_dir / f"{td}_curated_solana.json"

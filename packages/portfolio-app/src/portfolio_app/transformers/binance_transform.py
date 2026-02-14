@@ -8,17 +8,19 @@ repo_root = Path(__file__).parents[4]
 sys.path.insert(0, str(repo_root / "packages"))
 from transform_core import get_data_dir
 
+
 def clean_binance_data(raw_data):
     """Clean and extract relevant Binance data."""
     return {
         "timestamp": raw_data.get("timestamp"),
         "total_usd": raw_data.get("total_usd"),
-        "assets": raw_data.get("assets", [])
+        "assets": raw_data.get("assets", []),
     }
+
 
 if __name__ == "__main__":
     # Main execution
-    td = pendulum.now().format('YYYY-MM-DD')
+    td = pendulum.now().format("YYYY-MM-DD")
     data_dir = get_data_dir()
     raw_path = data_dir / f"{td}_raw_binance.json"
     curated_path = data_dir / f"{td}_curated_binance.json"
