@@ -16,30 +16,85 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Dict, Any # Added for process dictionary
 
 # Add packages to path for imports
 repo_root = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(repo_root / "packages"))
 
 
-def run_step(name: str, pkg_path: str, command: list[str]) -> bool:
-    """Run a pipeline step."""
+def _run_blocking_step(name: str, pkg_path: str, command: list[str]) -> bool:
+    """Run a pipeline step and wait for it to complete. Only prints output on failure for better read."""
     print(f"Running: {name}")
 
-    # For uv run commands, use the simpler approach
-    if command and command[0] == "uv" and len(command) > 1 and command[1] == "run":
-        result = subprocess.run(command, cwd=pkg_path, capture_output=True, text=True)
-    else:
-        result = subprocess.run(command, cwd=pkg_path, capture_output=True, text=True)
+    # The original logic for `uv run` was redundant, simplifying to a single subprocess.run call.
+    result = subprocess.run(command, cwd=pkg_path, capture_output=True, text=True)
 
-    if result.stdout:
-        print(result.stdout)
     if result.returncode != 0:
-        print(f"❌ {name} failed:")
-        print(result.stderr)
+        print(f"❌ {name} failed with exit code {result.returncode}")
+        if result.stdout:
+            print(f"--- {name} STDOUT ---")
+            print(result.stdout.strip())
+        if result.stderr:
+            print(f"--- {name} STDERR ---")
+            print(result.stderr.strip())
         return False
-    print(f"✓ {name} completed\n")
+
+    print(f"✓ {name} completed")
     return True
+
+
+def _start_non_blocking_step(name: str, pkg_path: str, command: list[str]) -> subprocess.Popen[Any]:
+    """Start a pipeline step subprocess for parallel execution."""
+    print(f"Starting: {name}")
+
+    process = subprocess.Popen(
+        command,
+        cwd=pkg_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return process
+
+
+def _wait_for_steps(steps: Dict[str, subprocess.Popen[Any]]) -> bool:
+    """Wait for all subprocesses to complete and log results. Returns False on any failure."""
+    all_success = True
+    results: Dict[str, Any] = {}
+    
+    # Wait for all processes to finish and collect output
+    for name, proc in steps.items():
+        # communicate() waits for the process and collects output
+        stdout, stderr = proc.communicate()
+
+        results[name] = {
+            "returncode": proc.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+        }
+
+    # Print results in a cleaner, consolidated manner
+    print("\n--- Fetch Results ---")
+    for name, res in results.items():
+        if res["returncode"] != 0:
+            all_success = False
+            print(f"❌ {name} failed with exit code {res['returncode']}")
+            if res["stdout"]:
+                print(f"--- {name} STDOUT ---")
+                print(res["stdout"].strip())
+            if res["stderr"]:
+                print(f"--- {name} STDERR ---")
+                print(res["stderr"].strip())
+        else:
+            print(f"✓ {name} completed")
+            # For successful runs, optionally print the first line of output for context
+            first_line = res["stdout"].splitlines()[0] if res["stdout"] else ""
+            if first_line:
+                 print(f"  > {first_line.strip()}")
+            
+    print() # Final newline for separation
+    return all_success
 
 
 def main():
@@ -58,25 +113,41 @@ def main():
     print(f"Data directory: {data_dir}\n")
 
     if not args.integrate:
-        # Step 1: Fetch Raw Data
+        # Step 1: Fetch Raw Data (Parallelized)
         print("--- Step 1: Fetch Raw Data ---")
+
+        processes = {}
 
         # KSEI
         ksei_path = repo_root / "packages/ksei-client"
-        run_step("KSEI", str(ksei_path), ["uv", "run", "examples/fetch_and_dump_portfolios.py"])
+        processes["KSEI"] = _start_non_blocking_step(
+            "KSEI", str(ksei_path), ["uv", "run", "examples/fetch_and_dump_portfolios.py"]
+        )
 
         # DeBank (Node.js)
         debank_path = repo_root / "packages/debank-scraper"
-        run_step("DeBank", str(debank_path), ["npm", "run", "scrape"])
+        processes["DeBank"] = _start_non_blocking_step(
+            "DeBank", str(debank_path), ["npm", "run", "scrape"]
+        )
 
         # Binance
         binance_path = repo_root / "packages/binance-client"
-        run_step("Binance", str(binance_path), ["uv", "run", "binance-fetch"])
+        processes["Binance"] = _start_non_blocking_step(
+            "Binance", str(binance_path), ["uv", "run", "binance-fetch"]
+        )
 
         # Alchemy
         alchemy_path = repo_root / "packages/alchemy-client"
         if alchemy_path.exists():
-            run_step("Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"])
+            processes["Alchemy"] = _start_non_blocking_step(
+                "Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"]
+            )
+        
+        # Wait for all fetch steps
+        if not _wait_for_steps(processes):
+            print("\nPipeline failed during data fetching. Aborting.")
+            sys.exit(1)
+
 
     if not args.fetch_only:
         # Step 2: Transform Data
@@ -94,14 +165,18 @@ def main():
 
         for name, script_path in transform_files:
             if script_path.exists():
-                run_step(name, str(script_path.parent), [sys.executable, str(script_path)])
+                if not _run_blocking_step(name, str(script_path.parent), [sys.executable, str(script_path)]):
+                    print(f"\nPipeline failed during {name}. Aborting.")
+                    sys.exit(1)
             else:
                 print(f"⚠ Skipping {name}: script not found")
 
         # Step 3: Integrate
         print("--- Step 3: Integrate ---")
         integrator_path = portfolio_app_path / "src/portfolio_app/integrators/portfolio_integration.py"
-        run_step("Integration", str(integrator_path.parent), [sys.executable, str(integrator_path)])
+        if not _run_blocking_step("Integration", str(integrator_path.parent), [sys.executable, str(integrator_path)]):
+            print("\nPipeline failed during integration. Aborting.")
+            sys.exit(1)
 
     print("\n✨ Pipeline completed successfully!")
 
