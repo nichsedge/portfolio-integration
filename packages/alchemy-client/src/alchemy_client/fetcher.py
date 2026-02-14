@@ -89,7 +89,7 @@ def main(output_dir=None):
             "network": token.get("network"),
             "tokenAddress": token.get("tokenAddress"),
             "balance": balance_adj,
-            "symbol": meta.get("symbol"),
+            "symbol": meta.get("symbol") or "SOL",
             "name": meta.get("name"),
             "decimals": decimals,
             "value_usd": value_usd,
@@ -103,7 +103,7 @@ def main(output_dir=None):
     print(f"{'Symbol':<15} {'Amount':>15} {'Value (USD)':>15}")
     print("-" * 50)
     for r in results:
-        symbol = r.get("symbol") or "N/A"
+        symbol = r.get("symbol") or "SOL"
         balance = r.get("balance") or 0
         value = r.get("value_usd") or 0
         print(f"{symbol:<15} {balance:>15,.4f} {value:>15,.2f}")

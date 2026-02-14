@@ -259,15 +259,8 @@ def main():
     # Combine all data
     all_data = ksei_standardized + debank_standardized + binance_standardized + alchemy_standardized
 
-    # Sort by value (descending) - use value in whichever currency is available
-    def sort_key(item):
-        if item["value_usd"] is not None:
-            return item["value_usd"]
-        elif item["value_idr"] is not None:
-            return item["value_idr"]  # Keep IDR for sorting
-        return 0
-
-    all_data.sort(key=sort_key, reverse=True)
+    # Sort by source, category, and asset
+    all_data.sort(key=lambda x: (str(x.get("source") or ""), str(x.get("category") or ""), str(x.get("asset") or "")))
 
     # Write to CSV
     fieldnames = [
