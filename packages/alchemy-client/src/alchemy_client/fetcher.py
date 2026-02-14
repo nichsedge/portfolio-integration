@@ -3,7 +3,7 @@
 import os
 import json
 import requests
-from datetime import datetime
+import pendulum
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -109,7 +109,7 @@ def main(output_dir=None):
         print(f"{symbol:<15} {balance:>15,.4f} {value:>15,.2f}")
 
     # Save to file
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = pendulum.now().to_date_string()
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     output_file = output_path / f"{current_date}_raw_alchemy.json"

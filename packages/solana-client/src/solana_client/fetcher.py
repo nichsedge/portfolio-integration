@@ -206,10 +206,10 @@ def main(output_dir=None):
         print(f"{r['symbol']:<15} {r['amount']:>15,.4f} {r['price']:>10,.2f} {r['value_usd']:>15,.2f}")
     
     # Save to file
-    from datetime import datetime
+    import pendulum
     from pathlib import Path
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = pendulum.now().to_date_string()
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     output_file = output_path / f"{current_date}_raw_solana.json"
