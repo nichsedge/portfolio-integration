@@ -233,10 +233,10 @@ def main(output_dir=None):
         )
 
     # Save to file
-    from datetime import datetime
+    import pendulum
     from pathlib import Path
-
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    
+    current_date = pendulum.now().to_date_string()
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     output_file = output_path / f"{current_date}_raw_solana.json"

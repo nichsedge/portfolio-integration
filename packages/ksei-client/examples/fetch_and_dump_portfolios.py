@@ -3,7 +3,7 @@ import json
 import asyncio
 import time
 from pathlib import Path
-import datetime
+import pendulum
 
 from ksei.client import KSEIClient
 from ksei.utils import FileAuthStore
@@ -33,7 +33,7 @@ async def fetch_and_dump_portfolios(
         raise AssertionError(f"Unexpected response type: {type(res)}")
 
     if write_output:
-        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        current_date = pendulum.now().to_date_string()
         out_file = Path(output_dir) / f"{current_date}_raw_ksei.json"
         out_file.parent.mkdir(parents=True, exist_ok=True)
         with out_file.open("w", encoding="utf-8") as f:

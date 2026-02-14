@@ -6,7 +6,7 @@ Fetches vault positions and user vaults from Hyperliquid API.
 import json
 import os
 import requests
-from datetime import datetime, UTC
+import pendulum
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -249,7 +249,7 @@ def save_hyperliquid_data(
     data = fetch_and_process_hyperliquid_data(wallet_address)
 
     # Use ISO date format
-    date_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    date_str = pendulum.now("UTC").to_date_string()
 
     # Save raw data
     raw_path = output_dir / f"{date_str}_raw_hyperliquid.json"
@@ -259,14 +259,10 @@ def save_hyperliquid_data(
     # Save cleaned data (same as standardized for now)
     cleaned_path = output_dir / f"{date_str}_curated_hyperliquid.json"
     with open(cleaned_path, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-                "vault_positions": data["standardized"],
-            },
-            f,
-            indent=2,
-        )
+        json.dump({
+            "timestamp": pendulum.now("UTC").to_iso8601_string().replace("+00:00", "Z"),
+            "vault_positions": data["standardized"]
+        }, f, indent=2)
 
     print(f"Saved raw data to {raw_path}")
     print(f"Saved curated data to {cleaned_path}")
