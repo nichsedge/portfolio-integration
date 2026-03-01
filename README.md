@@ -10,6 +10,7 @@ This system extracts and integrates portfolio data from various financial platfo
 - **DeBank** - DeFi portfolio tracking platform
 - **Binance** - Cryptocurrency exchange
 - **Hyperliquid** - DeFi protocol
+- **Manual CSV** - For bank accounts, cash, and other non-API assets
 
 ## Quick Start
 
@@ -77,7 +78,8 @@ All data follows a standardized pipeline:
 
 1. **Raw Extraction** → `{YYYY-MM-DD}_raw_<source>.json`
 2. **Cleaning/Processing** → `{YYYY-MM-DD}_curated_<source>.json`
-3. **Integration** → `{YYYY-MM-DD}_portfolio.csv`
+3. **Manual Data** (Optional) → `manual_balances.csv`
+4. **Integration** → `{YYYY-MM-DD}_portfolio.csv`
 
 ### Running Individual Components
 
@@ -105,6 +107,25 @@ python src/portfolio_app/transformers/binance_transform.py
 # Integrate (optional - done by pipeline)
 python src/portfolio_app/integrators/portfolio_integration.py
 ```
+
+## Manual Asset Tracking
+
+For assets that do not have an API (e.g., local bank accounts, cash, physical gold), you can maintain a CSV file.
+
+1. Create a `manual_balances.csv` file in your data directory (default: `data/`).
+2. Use the format provided in `data/manual_balances_template.csv`.
+3. The pipeline will automatically detect this file and integrate it into the final portfolio snapshot.
+
+Required columns in `manual_balances.csv`:
+- `source`: The name of the source (e.g., "Bank", "Physical")
+- `category`: Asset category (e.g., "Cash", "Asset")
+- `asset`: Name of the asset (e.g., "BCA", "Gold")
+- `currency`: Currency code (e.g., "IDR", "USD")
+- `amount`: Quantity held
+- `value_idr`: Total value in IDR (optional if `value_usd` is provided)
+- `value_usd`: Total value in USD (optional if `value_idr` is provided)
+- `account`: Account identifier or description
+- `details`: Any additional notes
 
 ## Adding New Data Sources
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Python monorepo managed with `uv` that implements a 3-stage ETL pipeline for aggregating financial portfolio data from multiple platforms:
 
-1. **Extract:** Fetch raw data from sources (KSEI, DeBank, Binance, Alchemy, Solana, QAZWA, Hyperliquid)
+1. **Extract:** Fetch raw data from sources (KSEI, DeBank, Binance, Alchemy, Solana, QAZWA, Hyperliquid) and read manual entries from `manual_balances.csv`
 2. **Transform:** Clean and filter each source into a curated format
 3. **Load:** Integrate all sources into a unified portfolio CSV
 
@@ -59,6 +59,7 @@ All data files use date-based naming in the configured data directory (from `POR
 
 - Raw output: `YYYY-MM-DD_raw_<source>.json`
 - Curated output: `YYYY-MM-DD_curated_<source>.json`
+- Manual input: `manual_balances.csv` (Optional)
 - Final integrated: `YYYY-MM-DD_portfolio.csv`
 
 The standard integration schema is:
