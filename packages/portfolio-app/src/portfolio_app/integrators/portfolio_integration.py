@@ -230,6 +230,26 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
     return standardized
 
 
+def standardize_manual_data(manual_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert Manual data to standardized format."""
+    standardized = []
+    
+    for row in manual_data:
+        standardized.append({
+            "source": row.get("source", "Manual"),
+            "category": row.get("category", "Unknown"),
+            "asset": row.get("asset", "Unknown"),
+            "currency": row.get("currency", ""),
+            "amount": row.get("amount"),  # These are already parsed as floats where appropriate
+            "value_idr": row.get("value_idr"),
+            "value_usd": row.get("value_usd"),
+            "account": row.get("account", ""),
+            "details": row.get("details", "")
+        })
+        
+    return standardized
+
+
 def main():
     """Main function to integrate KSEI and DeBank data into CSV."""
     # Get today's date
@@ -241,6 +261,7 @@ def main():
     debank_raw_path = data_dir / f"{td}_raw_debank.json"
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
     alchemy_curated_path = data_dir / f"{td}_curated_alchemy.json"
+    manual_csv_path = data_dir / "manual_balances.csv"
     output_csv_path = data_dir / f"{td}_portfolio.csv"
 
     # Load KSEI and DeBank raw data
@@ -273,6 +294,33 @@ def main():
         alchemy_standardized = []
         alchemy_loaded = False
 
+    # Try to load Manual CSV data
+    manual_loaded = False
+    manual_standardized = []
+    if manual_csv_path.exists():
+        try:
+            with open(manual_csv_path, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                manual_raw = []
+                for row in reader:
+                    # Convert numeric fields
+                    for field in ["amount", "value_idr", "value_usd"]:
+                        if row.get(field):
+                            try:
+                                row[field] = float(row[field])
+                            except ValueError:
+                                row[field] = 0.0
+                        else:
+                            row[field] = None
+                    manual_raw.append(row)
+            manual_standardized = standardize_manual_data(manual_raw)
+            manual_loaded = True
+            print(f"Loaded {len(manual_standardized)} manual items.")
+        except Exception as e:
+            print(f"Error loading manual data: {e}")
+    else:
+        print("Manual data not found, skipping...")
+
     # Clean and process data
     ksei_clean = clean_json(ksei_raw)
     debank_clean = extract_relevant(debank_raw)
@@ -287,13 +335,14 @@ def main():
         + debank_standardized
         + binance_standardized
         + alchemy_standardized
+        + manual_standardized
     )
 
     # Sort by source, category, and asset
     all_data.sort(
         key=lambda x: (
-            str(x.get("source") or ""),
             str(x.get("category") or ""),
+            str(x.get("source") or ""),
             str(x.get("asset") or ""),
         )
     )
@@ -337,6 +386,8 @@ def main():
         sources_parts.append(f"Binance ({len(binance_standardized)} items)")
     if alchemy_loaded:
         sources_parts.append(f"Alchemy ({len(alchemy_standardized)} items)")
+    if manual_loaded:
+        sources_parts.append(f"Manual ({len(manual_standardized)} items)")
     print(f"Sources: {', '.join(sources_parts)}")
 
     if total_idr > 0:
