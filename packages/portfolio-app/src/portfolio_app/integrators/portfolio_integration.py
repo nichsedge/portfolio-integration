@@ -21,6 +21,16 @@ from portfolio_app.transformers.debank_transform import extract_relevant
 from transform_core import get_data_dir, parse_usd
 
 
+STABLE_COINS = {"USDT", "USDC", "DAI", "FDUSD", "TUSD", "BUSD", "PYUSD", "USDP"}
+
+
+def get_standard_category(category: str, asset: str) -> str:
+    """Return the correct category, separating stablecoins from crypto/defi."""
+    if category in ["Cryptocurrency", "DeFi Protocol"] and asset in STABLE_COINS:
+        return "Stablecoin"
+    return category
+
+
 def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert KSEI data to standardized format."""
     standardized = []
@@ -116,7 +126,7 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
         standardized.append(
             {
                 "source": "DeBank",
-                "category": "Crypto Wallet",
+                "category": "Cryptocurrency",
                 "asset": wallet.get("chain", "Unknown"),
                 "currency": "USD",
                 "amount": 1,  # Wallets don't have amount, just value
@@ -143,7 +153,7 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
                 standardized.append(
                     {
                         "source": "DeBank",
-                        "category": "DeFi Protocol",
+                        "category": get_standard_category("DeFi Protocol", token.get("symbol", "Unknown")),
                         "asset": token.get("symbol", "Unknown"),
                         "currency": "USD",
                         "amount": float(entry.get("amount", 0)),
@@ -186,7 +196,7 @@ def standardize_binance_data(binance_data: Dict[str, Any]) -> List[Dict[str, Any
         standardized.append(
             {
                 "source": "Binance",
-                "category": "Cryptocurrency",
+                "category": get_standard_category("Cryptocurrency", asset_symbol),
                 "asset": asset_symbol,
                 "currency": "USD",
                 "amount": amount,
@@ -216,7 +226,7 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
         standardized.append(
             {
                 "source": "Alchemy",
-                "category": "Cryptocurrency",
+                "category": get_standard_category("Cryptocurrency", asset_symbol),
                 "asset": asset_symbol,
                 "currency": "USD",
                 "amount": amount,
@@ -235,10 +245,12 @@ def standardize_manual_data(manual_data: List[Dict[str, Any]]) -> List[Dict[str,
     standardized = []
     
     for row in manual_data:
+        category = row.get("category", "Unknown")
+        asset = row.get("asset", "Unknown")
         standardized.append({
             "source": row.get("source", "Manual"),
-            "category": row.get("category", "Unknown"),
-            "asset": row.get("asset", "Unknown"),
+            "category": get_standard_category(category, asset),
+            "asset": asset,
             "currency": row.get("currency", ""),
             "amount": row.get("amount"),  # These are already parsed as floats where appropriate
             "value_idr": row.get("value_idr"),
