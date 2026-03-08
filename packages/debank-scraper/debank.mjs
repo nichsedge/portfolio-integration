@@ -55,7 +55,7 @@ async function autoScroll(page) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ channel: 'chrome', headless: false });
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
   });
@@ -65,13 +65,13 @@ async function autoScroll(page) {
   page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
 
   console.log(`Navigating to ${PROFILE_URL}...`);
-  await page.goto(PROFILE_URL, { waitUntil: "networkidle" });
+  await page.goto(PROFILE_URL, { waitUntil: "domcontentloaded" });
 
   try {
-    // Wait for the main asset value to appear
-    await page.waitForSelector("div[class*='HeaderInfo_totalAssetValue']", { timeout: 30000 });
+    // Wait for the main asset value to appear (using more robust selectors)
+    await page.waitForSelector("div[class*='HeaderInfo_totalAssetInner'], div[class*='HeaderInfo_totalAsset'], div[class*='HeaderInfo_totalAssetValue']", { timeout: 10000 });
   } catch (e) {
-    console.warn("Timed out waiting for total assets selector.");
+    console.warn("Timed out waiting for total assets selector after 10s. Continuing...");
   }
 
   // Click 'Unfold chains' if present to get full breakdown
@@ -95,14 +95,13 @@ async function autoScroll(page) {
       timestamp: new Date().toISOString(),
       wallet: {},
       social: {},
-      chains: [],
       tokens: [],
       protocols: [],
       nfts: []
     };
 
     // 1. Overview & Social
-    const netWorthEl = document.querySelector("div[class*='HeaderInfo_totalAsset']");
+    const netWorthEl = document.querySelector("div[class*='HeaderInfo_totalAssetInner'], div[class*='HeaderInfo_totalAsset']");
     const changeEl = document.querySelector("div[class*='HeaderInfo_changePercent'], [class*='HeaderInfo_isLoss'], [class*='HeaderInfo_isProfit']");
 
     // Fallback if the specific value element is nested
@@ -120,28 +119,27 @@ async function autoScroll(page) {
       else if (text.includes('TVF')) data.social.tvf = text.replace('TVF', '').trim();
     });
 
-    // 2. Chain Breakdown
-    const chainItems = document.querySelectorAll("div[class*='AssetsOnChain_item']");
-    chainItems.forEach(item => {
-      const img = item.querySelector("img");
-      const name = img ? (img.alt || img.src.split('/').pop().split('.')[0]) : "Unknown";
-      const valueText = item.innerText.trim();
-      const parts = valueText.split('\n');
-      data.chains.push({
-        name: parts[0] || name,
-        value: parts[1] || null,
-        weight: parts[2] || null
-      });
-    });
-
-    // 3. Wallet Tokens
+    // 2. Wallet Tokens
     const tokenRows = document.querySelectorAll("div[class*='TokenWallet_table'] .db-table-row");
     tokenRows.forEach(row => {
       const symbol = row.querySelector("[class*='TokenWallet_detailLink']")?.innerText.trim();
       const cells = Array.from(row.querySelectorAll(".db-table-cell"));
+
+      // Extract chain from the chain logo URL
+      const chainLogoImg = row.querySelector("img[class*='TokenWallet_tokenChainIcon']");
+      let chain = null;
+      if (chainLogoImg && chainLogoImg.src) {
+        const urlParts = chainLogoImg.src.split('/');
+        const logoUrlIndex = urlParts.indexOf('logo_url');
+        if (logoUrlIndex !== -1 && logoUrlIndex + 1 < urlParts.length) {
+          chain = urlParts[logoUrlIndex + 1];
+        }
+      }
+
       if (symbol && cells.length >= 4) {
         data.tokens.push({
           symbol,
+          chain,
           price: cells[1]?.innerText.trim(),
           amount: cells[2]?.innerText.trim(),
           value: cells[3]?.innerText.trim()
@@ -149,9 +147,9 @@ async function autoScroll(page) {
       }
     });
 
-    // 4. Protocols
+    // 3. Protocols
     // Target both the summary grid cards and the detailed project sections
-    const protocolItems = document.querySelectorAll("[class*='ProjectCell_assetsItem'], [class*='Project_project'], [class*='ProjectCell_projectCell']");
+    const protocolItems = document.querySelectorAll("[class*='ProjectCell_assetsItem'], [class*='Project_project'], [class*='ProjectCell_projectCell'], [class*='ProjectCell_assetsItemWrap']");
     protocolItems.forEach(item => {
       const nameEl = item.querySelector("[class*='ProjectCell_assetsItemNameText'], [class*='Project_projectName'], [class*='ProjectTitle_name'], [class*='ProjectCell_name']");
       const valueEl = item.querySelector("[class*='ProjectCell_assetsItemWorth'], [class*='Project_projectValue'], [class*='projectTitle-number'], [class*='ProjectCell_value']");
@@ -170,7 +168,7 @@ async function autoScroll(page) {
     return data;
   });
 
-  // 5. NFTs
+  // 4. NFTs
   // console.log("Navigating to NFT tab...");
   // const NFT_URL = `${PROFILE_URL}/nft`;
   // await page.goto(NFT_URL, { waitUntil: "networkidle" });

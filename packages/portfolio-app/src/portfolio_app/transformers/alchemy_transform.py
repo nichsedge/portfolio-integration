@@ -58,7 +58,8 @@ if __name__ == "__main__":
         print(f"Cleaned Alchemy data saved to {curated_path}")
         print(f"Total USD: ${cleaned['total_usd']:.2f}")
     except FileNotFoundError:
-        print(f"Alchemy data file not found: {raw_path}")
-        print("Skipping Alchemy data processing.")
+        print(f"Alchemy raw data not found at {raw_path}, skipping transform...")
+        sys.exit(0)
     except Exception as e:
         print(f"Error processing Alchemy data: {e}")
+        sys.exit(1)

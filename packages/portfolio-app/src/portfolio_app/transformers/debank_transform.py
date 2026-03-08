@@ -96,4 +96,5 @@ if __name__ == "__main__":
             json.dump(cleaned_data, f, indent=2)
         print(f"Curated data saved to {curated_path}")
     else:
-        print(f"Raw file not found: {raw_path}")
+        print(f"DeBank raw data not found at {raw_path}, skipping transform...")
+        sys.exit(0)

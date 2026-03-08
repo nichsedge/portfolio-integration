@@ -66,8 +66,12 @@ if __name__ == "__main__":
     raw_path = data_dir / f"{td}_raw_ksei.json"
     curated_path = data_dir / f"{td}_curated_ksei.json"
 
-    with open(raw_path, "r", encoding="utf-8") as file:
-        original_data = json.load(file)
+    try:
+        with open(raw_path, "r", encoding="utf-8") as file:
+            original_data = json.load(file)
+    except FileNotFoundError:
+        print(f"KSEI raw data not found at {raw_path}, skipping transform...")
+        sys.exit(0)
 
     # Clean the data
     cleaned_data = clean_json(original_data)

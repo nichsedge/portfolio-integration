@@ -298,12 +298,25 @@ def main():
     manual_csv_path = data_dir / "_manual_balances.csv"
     output_csv_path = data_dir / f"{td}_portfolio.csv"
 
-    # Load KSEI and DeBank raw data
-    with open(ksei_raw_path, "r", encoding="utf-8") as f:
-        ksei_raw = json.load(f)
+    # Try to load KSEI data
+    try:
+        with open(ksei_raw_path, "r", encoding="utf-8") as f:
+            ksei_raw = json.load(f)
+        ksei_loaded = True
+    except FileNotFoundError:
+        print(f"KSEI data not found at {ksei_raw_path}, skipping...")
+        ksei_raw = {}
+        ksei_loaded = False
 
-    with open(debank_raw_path, "r", encoding="utf-8") as f:
-        debank_raw = json.load(f)
+    # Try to load DeBank data
+    try:
+        with open(debank_raw_path, "r", encoding="utf-8") as f:
+            debank_raw = json.load(f)
+        debank_loaded = True
+    except FileNotFoundError:
+        print(f"DeBank data not found at {debank_raw_path}, skipping...")
+        debank_raw = {}
+        debank_loaded = False
 
     # Try to load Binance data (optional)
     try:
@@ -313,7 +326,7 @@ def main():
         binance_standardized = standardize_binance_data(binance_clean)
         binance_loaded = True
     except FileNotFoundError:
-        print("Binance data not found, skipping...")
+        print(f"Binance data not found at {binance_raw_path}, skipping...")
         binance_standardized = []
         binance_loaded = False
 
@@ -324,7 +337,7 @@ def main():
         alchemy_standardized = standardize_alchemy_data(alchemy_curated)
         alchemy_loaded = True
     except FileNotFoundError:
-        print("Alchemy curated data not found, skipping...")
+        print(f"Alchemy curated data not found at {alchemy_curated_path}, skipping...")
         alchemy_standardized = []
         alchemy_loaded = False
 
@@ -355,13 +368,18 @@ def main():
     else:
         print("Manual data not found, skipping...")
 
-    # Clean and process data
-    ksei_clean = clean_json(ksei_raw)
-    debank_clean = extract_relevant(debank_raw)
+    # Clean and process data (only if data was loaded)
+    if ksei_loaded:
+        ksei_clean = clean_json(ksei_raw)
+        ksei_standardized = standardize_ksei_data(ksei_clean)
+    else:
+        ksei_standardized = []
 
-    # Standardize data
-    ksei_standardized = standardize_ksei_data(ksei_clean)
-    debank_standardized = standardize_debank_data(debank_clean)
+    if debank_loaded:
+        debank_clean = extract_relevant(debank_raw)
+        debank_standardized = standardize_debank_data(debank_clean)
+    else:
+        debank_standardized = []
 
     # Combine all data
     all_data = (
@@ -412,17 +430,18 @@ def main():
     print(f"Total assets: {len(all_data)}")
 
     # Build sources list
-    sources_parts = [
-        f"KSEI ({len(ksei_standardized)} items)",
-        f"DeBank ({len(debank_standardized)} items)",
-    ]
+    sources_parts = []
+    if ksei_loaded:
+        sources_parts.append(f"KSEI ({len(ksei_standardized)} items)")
+    if debank_loaded:
+        sources_parts.append(f"DeBank ({len(debank_standardized)} items)")
     if binance_loaded:
         sources_parts.append(f"Binance ({len(binance_standardized)} items)")
     if alchemy_loaded:
         sources_parts.append(f"Alchemy ({len(alchemy_standardized)} items)")
     if manual_loaded:
         sources_parts.append(f"Manual ({len(manual_standardized)} items)")
-    print(f"Sources: {', '.join(sources_parts)}")
+    print(f"Sources: {', '.join(sources_parts) if sources_parts else 'No data sources loaded'}")
 
     if total_idr > 0:
         print(f"Total IDR value: {total_idr:,.2f}")
@@ -461,6 +480,9 @@ def main():
 
         currency_str = " / ".join(currency_info)
         print(f"  {cat}: {data['count']} items, {currency_str}")
+
+    if not categories:
+        print("  No data to display")
 
 
 if __name__ == "__main__":

@@ -36,7 +36,8 @@ if __name__ == "__main__":
 
         print(f"Cleaned Binance data saved to {curated_path}")
     except FileNotFoundError:
-        print(f"Binance data file not found: {raw_path}")
-        print("Skipping Binance data processing.")
+        print(f"Binance raw data not found at {raw_path}, skipping transform...")
+        sys.exit(0)
     except Exception as e:
         print(f"Error processing Binance data: {e}")
+        sys.exit(1)
