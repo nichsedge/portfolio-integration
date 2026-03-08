@@ -120,63 +120,85 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
     """Convert DeBank data to standardized format."""
     standardized = []
 
-    # Process wallets
-    for wallet in debank_data.get("wallets", []):
-        usd_value = parse_usd(wallet.get("USD Value", 0))
-        standardized.append(
-            {
-                "source": "DeBank",
-                "category": "Cryptocurrency",
-                "asset": wallet.get("chain", "Unknown"),
-                "currency": "USD",
-                "amount": 1,  # Wallets don't have amount, just value
-                "value_idr": None,
-                "value_usd": usd_value,
-                "account": wallet.get("Address", ""),
-                "details": f"Wallet: {wallet.get('name', '')}, Chain: {wallet.get('chain', '')}",
-            }
-        )
+    # Process wallet tokens (aggregated by symbol)
+    token_aggregation = {}
+    for token in debank_data.get("tokens", []):
+        usd_value = parse_usd(token.get("value") or "0")
+        if usd_value > 0:
+            symbol = token.get("symbol", "Unknown")
+            amount_str = token.get("amount") or "0"
+            if isinstance(amount_str, str):
+                amount_str = amount_str.replace(",", "")
+            
+            try:
+                amount = float(amount_str)
+            except ValueError:
+                amount = 0.0
+
+            if symbol not in token_aggregation:
+                token_aggregation[symbol] = {
+                    "source": "DeBank",
+                    "category": get_standard_category("Cryptocurrency", symbol),
+                    "asset": symbol,
+                    "currency": "USD",
+                    "amount": 0.0,
+                    "value_idr": None,
+                    "value_usd": 0.0,
+                    "account": "DeBank Wallet",
+                    "details": f"Price: {token.get('price', '')}",
+                }
+            
+            token_aggregation[symbol]["amount"] += amount
+            token_aggregation[symbol]["value_usd"] += usd_value
+
+    for aggregated_token in token_aggregation.values():
+        standardized.append(aggregated_token)
 
     # Process protocols
     for protocol in debank_data.get("protocols", []):
-        protocol_name = (
-            protocol.get("name") or f"Protocol {protocol.get('id', 'Unknown')}"
-        )
-        protocol_chain = protocol.get("chain") or "Unknown"
-        protocol_value = parse_usd(protocol.get("usdValue", 0))
-
-        # If protocol has data entries, process them
-        for entry in protocol.get("data", []):
-            usd_value = parse_usd(entry.get("USD Value", 0))
-            if usd_value >= 10:
-                token = entry.get("token", {})
-                standardized.append(
-                    {
-                        "source": "DeBank",
-                        "category": get_standard_category("DeFi Protocol", token.get("symbol", "Unknown")),
-                        "asset": token.get("symbol", "Unknown"),
-                        "currency": "USD",
-                        "amount": float(entry.get("amount", 0)),
-                        "value_idr": None,
-                        "value_usd": usd_value,
-                        "account": f"{protocol_name} on {protocol_chain}",
-                        "details": f"Protocol: {protocol_name}, Chain: {protocol_chain}, Token: {token.get('symbol', '')}",
-                    }
-                )
-
-        # If protocol has no data entries but has value, add it as a single entry
-        if not protocol.get("data") and protocol_value >= 10:
+        usd_value = parse_usd(protocol.get("value") or "0")
+        name = protocol.get("name", "Unknown")
+        if usd_value > 0:
             standardized.append(
                 {
                     "source": "DeBank",
                     "category": "DeFi Protocol",
-                    "asset": "Unknown",
+                    "asset": name,
                     "currency": "USD",
-                    "amount": 0.0,
+                    "amount": 1.0,
                     "value_idr": None,
-                    "value_usd": protocol_value,
-                    "account": f"{protocol_name} on {protocol_chain}",
-                    "details": f"Protocol: {protocol_name}, Chain: {protocol_chain}",
+                    "value_usd": usd_value,
+                    "account": "DeBank Protocol",
+                    "details": f"Protocol: {name}",
+                }
+            )
+
+    # Process NFTs (minimal summary)
+    for nft in debank_data.get("nfts", []):
+        avg_price = parse_usd(nft.get("avg_price") or "0")
+        amount_str = nft.get("amount") or "1"
+        if not amount_str.strip():
+            amount_str = "1"
+        
+        try:
+            amount = float(amount_str.replace(",", ""))
+        except ValueError:
+            amount = 1.0
+            
+        value_usd = avg_price * amount if avg_price > 0 else 0
+        
+        if value_usd > 0 or avg_price > 0:
+            standardized.append(
+                {
+                    "source": "DeBank",
+                    "category": "NFT",
+                    "asset": nft.get("collection", "Unknown"),
+                    "currency": "USD",
+                    "amount": amount,
+                    "value_idr": None,
+                    "value_usd": value_usd if value_usd > 0 else avg_price,
+                    "account": "DeBank NFT",
+                    "details": f"Collection: {nft.get('collection')}, Avg Price: {nft.get('avg_price')}",
                 }
             )
 

@@ -28,14 +28,9 @@ const dirname = path.dirname(OUTPUT_PATH);
 
 async function ensureDirectoryExists() {
   try {
-    // This will create the directory if it doesn't exist.
-    // It will do nothing if it already exists.
-    // It will create parent directories if needed due to { recursive: true }.
     await fs.mkdir(dirname, { recursive: true });
     console.log(`Directory '${dirname}' exists or was created.`);
   } catch (err) {
-    // This catch block will only execute for actual errors
-    // (e.g., lack of permissions), not if the directory exists.
     console.error(`Failed to create directory:`, err);
   }
 }
@@ -45,260 +40,163 @@ async function autoScroll(page) {
   await page.evaluate(async () => {
     await new Promise((resolve) => {
       let totalHeight = 0;
-      const distance = 500;
-      const timer = setInterval(() => {
-        const scrollHeight = document.body.scrollHeight;
+      let distance = 400;
+      let timer = setInterval(() => {
+        let scrollHeight = document.body.scrollHeight;
         window.scrollBy(0, distance);
         totalHeight += distance;
-
         if (totalHeight >= scrollHeight) {
           clearInterval(timer);
           resolve();
         }
-      }, 300);
+      }, 100);
     });
   });
 }
-
-async function extractAssetData(page) {
-  return await page.evaluate(() => {
-    const allElements = document.querySelectorAll("*");
-    for (let element of allElements) {
-      const text = element.textContent || "";
-      const match = text.match(/\$[\d,]+.*?[+\-]\d+\.\d+%/);
-      if (match) {
-        const dollarMatch = text.match(/\$[\d,]+/);
-        const percentMatch = text.match(/[+\-]\d+\.\d+%/);
-        return {
-          found: true,
-          amount: dollarMatch ? dollarMatch[0] : "",
-          change: percentMatch ? percentMatch[0] : "",
-        };
-      }
-    }
-    return { found: false, message: "No asset data found" };
-  });
-}
-
-async function extractProfileData(page) {
-  return await page.evaluate(() => {
-    const data = {};
-    const items = document.querySelectorAll("div[class*='HeaderInfo_infoItem']");
-    items.forEach((item) => {
-      if (item.closest("a")) return;
-      const title = item.querySelector("div[class*='HeaderInfo_title'], div[class*='infoItemTitle']")?.innerText.trim();
-      const value = item.querySelector("div[class*='HeaderInfo_value'], div[class*='infoItemValue']")?.innerText.trim();
-      if (title && value) data[title] = value;
-    });
-
-    // Also try to get the total net worth specifically
-    const totalAsset = document.querySelector("div[class*='HeaderInfo_totalAssetInner'], div[class*='totalAsset']");
-    if (totalAsset) {
-      data['Total Assets'] = totalAsset.innerText.trim();
-    }
-
-    return data;
-  });
-}
-
-async function extractWallets(page) {
-  return await page.evaluate(() => {
-    const table = document.querySelector("div[class*='TokenWallet_table']");
-    if (!table) return [];
-
-    const headerEls = table.querySelectorAll("div[class*='db-table-headerItem']");
-    const headers = Array.from(headerEls).map((el) => el.innerText.trim());
-
-    const rowEls = table.querySelectorAll("div[class*='db-table-row']");
-    return Array.from(rowEls).map((row) => {
-      const cells = row.querySelectorAll("div[class*='db-table-cell']");
-
-      // Extract the href and chain
-      const tokenLink = cells[0]?.querySelector("a");
-      let chain = "";
-      if (tokenLink?.getAttribute("href")) {
-        const hrefParts = tokenLink.getAttribute("href").split("/");
-        if (hrefParts.length >= 3) {
-          chain = hrefParts[2]; // /token/{chain}/{token} -> get {chain}
-        }
-      }
-
-      // Fallback for chain: check for icon alt
-      if (!chain) {
-        const chainIcon = cells[0]?.querySelector('img[class*="ChainIcon"]');
-        if (chainIcon) {
-          const alt = chainIcon.alt || "";
-          if (alt) chain = alt.toLowerCase();
-        }
-      }
-
-      const values = Array.from(cells).map((cell, i) => {
-        return cell.innerText.trim();
-      });
-
-      const rowObj = {};
-      headers.forEach((key, i) => {
-        rowObj[key] = values[i] || "";
-      });
-      rowObj.chain = chain;
-
-      // Ensure 'name' is available for the integrator
-      if (rowObj.Token) {
-        rowObj.name = rowObj.Token;
-      }
-
-      return rowObj;
-    });
-  });
-}
-
-
-async function extractProtocols(page) {
-  return await page.$$eval('div[class*="Project_project__"]', (projects) => {
-    return projects.map((project) => {
-      // Try multiple selectors for protocol name
-      const nameSelectors = [
-        'span[class*="ProjectTitle_protocolLink"]',
-        'a[class*="protocolLink"]',
-        'div[class*="ProjectTitle_name"]',
-        'div[class*="projectTitle-name"]',
-        '[class*="protocolName"]'
-      ];
-
-      let protocolName = null;
-      for (const selector of nameSelectors) {
-        const el = project.querySelector(selector);
-        if (el && el.innerText.trim()) {
-          protocolName = el.innerText.trim();
-          break;
-        }
-      }
-
-      // Fallback if still null
-      if (!protocolName) {
-        const firstLink = project.querySelector('a');
-        if (firstLink) protocolName = firstLink.innerText.trim();
-      }
-
-      const usdValueElem = project.querySelector('div[class*="projectTitle-number"], [class*="usdValue"]');
-      const usdValue = usdValueElem?.innerText.trim() || null;
-
-      // Extract protocol ID from any link containing protocol
-      let protocolId = null;
-      const allLinks = Array.from(project.querySelectorAll('a'));
-      const protocolLink = allLinks.find(a => a.getAttribute('href')?.includes('/protocol/'));
-      if (protocolLink) {
-        const href = protocolLink.getAttribute('href');
-        const match = href.match(/\/protocol\/([^/]+)/);
-        if (match) protocolId = match[1];
-      }
-
-      // Extract chain icon
-      const chainIcon = project.querySelector('img[class*="ProjectTitle_chainIcon"], img[class*="ChainIcon"], img[class*="ProjectTitle_chain_"]');
-      let chain = null;
-      if (chainIcon) {
-        chain = chainIcon.alt || chainIcon.getAttribute('data-name') || chainIcon.getAttribute('title');
-      }
-
-      // If still no chain, look for it in the protocol card area
-      if (!chain) {
-        const potentialChainIcon = project.querySelector('div[class*="ProjectTitle_chainIcon"] img, .ChainIcon img');
-        if (potentialChainIcon) {
-          chain = potentialChainIcon.alt || potentialChainIcon.getAttribute('data-name');
-        }
-      }
-
-      // Extract headers
-      const headerElems = project.querySelectorAll('div[class*="table_header__"] > div > span, div[class*="db-table-headerItem"], div[class*="Project_project__"] div.db-table-headerItem');
-      const headers = Array.from(headerElems)
-        .map((el) => el.innerText.trim())
-        .filter((txt) => txt !== "");
-
-      // Extract rows
-      const rowElems = project.querySelectorAll('div[class*="table_contentRow__"], div[class*="db-table-row"]');
-      const dataRows = Array.from(rowElems).map((row) => {
-        const cells = row.querySelectorAll(':scope > div, div[class*="db-table-cell"]');
-        const values = Array.from(cells).map((cell) => cell.innerText.trim());
-
-        const obj = {};
-        headers.forEach((key, i) => {
-          const val = values[i] || null;
-          obj[key] = val;
-
-          // Integrator compatibility: extract token symbol if possible
-          const lowerKey = key.toLowerCase();
-          if (['balance', 'supplied', 'borrowed', 'token', 'asset', 'pool', 'staked', 'collateral'].some(k => lowerKey.includes(k))) {
-            if (val && !obj.token) {
-              const match = val.match(/^([\d,.]+)\s+([A-Z0-9a-z./]+)/);
-              if (match) {
-                obj.amount = match[1].replace(/,/g, '');
-                obj.token = { symbol: match[2] };
-              } else {
-                const parts = val.split('\n')[0].trim().split(/\s+/);
-                if (parts.length === 2 && parts[0] && !isNaN(parts[0].replace(/,/g, ''))) {
-                  obj.amount = parts[0].replace(/,/g, '');
-                  obj.token = { symbol: parts[1] };
-                } else if (parts.length === 1 && parts[0] && parts[0].length < 15) {
-                  // Only set as token if it looks like a symbol (doesn't start with $)
-                  if (!parts[0].startsWith('$')) {
-                    obj.token = { symbol: parts[0] };
-                  }
-                }
-              }
-            }
-          }
-        });
-
-        // Final fallback for amount
-        if (!obj.amount && obj['Amount']) obj.amount = obj['Amount'].replace(/,/g, '');
-
-        return obj;
-      });
-
-      return {
-        id: protocolId,
-        name: protocolName,
-        usdValue,
-        chain,
-        data: dataRows,
-      };
-    });
-  });
-}
-
 
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: false });
-  const page = await browser.newPage();
-  await page.goto(PROFILE_URL, { waitUntil: "domcontentloaded" });
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+  });
+  const page = await context.newPage();
 
-  // Wait for any stable element that signals page structure is ready
-  // Using a more generic selector for the header area
+  // Log browser console messages
+  page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
+
+  console.log(`Navigating to ${PROFILE_URL}...`);
+  await page.goto(PROFILE_URL, { waitUntil: "networkidle" });
+
   try {
-    await page.waitForSelector("div[class*='HeaderInfo_headerInfoWrap'], div[class*='HeaderInfo_totalAsset'], div[class*='HeaderInfo']", { timeout: 20000 });
+    // Wait for the main asset value to appear
+    await page.waitForSelector("div[class*='HeaderInfo_totalAssetValue']", { timeout: 30000 });
   } catch (e) {
-    console.warn("Header selector timeout, trying to proceed anyway...");
+    console.warn("Timed out waiting for total assets selector.");
   }
 
-  // Scroll to load lazy content
+  // Click 'Unfold chains' if present to get full breakdown
+  try {
+    const unfoldBtn = await page.$("div[class*='AssetsOnChain_unfoldBtn']");
+    if (unfoldBtn) {
+      console.log("Unfolding chains...");
+      await unfoldBtn.click();
+      await page.waitForTimeout(1000);
+    }
+  } catch (e) {
+    console.log("No unfold button found or failed to click.");
+  }
+
+  // Scroll to load all lazy elements (tokens, protocols)
   await autoScroll(page);
+  await page.waitForTimeout(2000);
 
-  // Give it a short pause for final requests to complete
-  await page.waitForTimeout(3000);
+  const mergedData = await page.evaluate(() => {
+    const data = {
+      timestamp: new Date().toISOString(),
+      wallet: {},
+      social: {},
+      chains: [],
+      tokens: [],
+      protocols: [],
+      nfts: []
+    };
 
-  const assetData = await extractAssetData(page);
-  const profileData = await extractProfileData(page);
-  const wallets = await extractWallets(page);
-  const protocols = await extractProtocols(page);
+    // 1. Overview & Social
+    const netWorthEl = document.querySelector("div[class*='HeaderInfo_totalAsset']");
+    const changeEl = document.querySelector("div[class*='HeaderInfo_changePercent'], [class*='HeaderInfo_isLoss'], [class*='HeaderInfo_isProfit']");
 
-  const mergedData = {
-    assetData,
-    profileData,
-    wallets,
-    protocols,
-    timestamp: new Date().toISOString(),
-    profileUrl: PROFILE_URL,
-  };
+    // Fallback if the specific value element is nested
+    data.wallet.total_net_worth = netWorthEl ? (netWorthEl.querySelector("[class*='Value']")?.innerText.trim() || netWorthEl.innerText.split('\n')[0].trim()) : null;
+    data.wallet.change_24h = changeEl ? changeEl.innerText.trim() : null;
+
+    const rankingEl = document.querySelector("a[href='/ranking'][class*='RankingTag_rankingTag']");
+    data.social.ranking = rankingEl ? rankingEl.innerText.trim() : null;
+
+    const infoItems = document.querySelectorAll("div[class*='HeaderInfo_infoItem']");
+    infoItems.forEach(item => {
+      const text = item.innerText.trim();
+      if (text.includes('Followers')) data.social.followers = text.replace('Followers', '').trim();
+      else if (text.includes('Following')) data.social.following = text.replace('Following', '').trim();
+      else if (text.includes('TVF')) data.social.tvf = text.replace('TVF', '').trim();
+    });
+
+    // 2. Chain Breakdown
+    const chainItems = document.querySelectorAll("div[class*='AssetsOnChain_item']");
+    chainItems.forEach(item => {
+      const img = item.querySelector("img");
+      const name = img ? (img.alt || img.src.split('/').pop().split('.')[0]) : "Unknown";
+      const valueText = item.innerText.trim();
+      const parts = valueText.split('\n');
+      data.chains.push({
+        name: parts[0] || name,
+        value: parts[1] || null,
+        weight: parts[2] || null
+      });
+    });
+
+    // 3. Wallet Tokens
+    const tokenRows = document.querySelectorAll("div[class*='TokenWallet_table'] .db-table-row");
+    tokenRows.forEach(row => {
+      const symbol = row.querySelector("[class*='TokenWallet_detailLink']")?.innerText.trim();
+      const cells = Array.from(row.querySelectorAll(".db-table-cell"));
+      if (symbol && cells.length >= 4) {
+        data.tokens.push({
+          symbol,
+          price: cells[1]?.innerText.trim(),
+          amount: cells[2]?.innerText.trim(),
+          value: cells[3]?.innerText.trim()
+        });
+      }
+    });
+
+    // 4. Protocols
+    // Target both the summary grid cards and the detailed project sections
+    const protocolItems = document.querySelectorAll("[class*='ProjectCell_assetsItem'], [class*='Project_project'], [class*='ProjectCell_projectCell']");
+    protocolItems.forEach(item => {
+      const nameEl = item.querySelector("[class*='ProjectCell_assetsItemNameText'], [class*='Project_projectName'], [class*='ProjectTitle_name'], [class*='ProjectCell_name']");
+      const valueEl = item.querySelector("[class*='ProjectCell_assetsItemWorth'], [class*='Project_projectValue'], [class*='projectTitle-number'], [class*='ProjectCell_value']");
+
+      if (nameEl) {
+        const name = nameEl.innerText.trim();
+        const value = valueEl ? valueEl.innerText.trim() : null;
+
+        // Filter out 'Wallet' as it's already handled, and avoid duplicates
+        if (name && name !== 'Wallet' && !data.protocols.find(p => p.name === name)) {
+          data.protocols.push({ name, value });
+        }
+      }
+    });
+
+    return data;
+  });
+
+  // 5. NFTs
+  // console.log("Navigating to NFT tab...");
+  // const NFT_URL = `${PROFILE_URL}/nft`;
+  // await page.goto(NFT_URL, { waitUntil: "networkidle" });
+  // await autoScroll(page);
+  // await page.waitForTimeout(3000);
+
+  // const nftData = await page.evaluate(() => {
+  //   const list = [];
+  //   const nftRows = document.querySelectorAll(".db-table-row");
+  //   nftRows.forEach(row => {
+  //     const cells = Array.from(row.querySelectorAll(".db-table-cell"));
+  //     if (cells.length >= 3) {
+  //       let collection = cells[0]?.innerText.trim() || "";
+  //       // Clean up collection name (remove counts or numbers if they are prefixed)
+  //       collection = collection.split('\n').pop().trim();
+
+  //       list.push({
+  //         collection,
+  //         amount: cells[1]?.innerText.trim(),
+  //         avg_price: cells[2]?.innerText.trim()
+  //       });
+  //     }
+  //   });
+  //   return list;
+  // });
+  // mergedData.nfts = nftData;
 
   await fs.writeFile(OUTPUT_PATH, JSON.stringify(mergedData, null, 2));
   console.log(`Data saved to ${OUTPUT_PATH}`);

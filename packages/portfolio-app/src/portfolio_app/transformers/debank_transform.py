@@ -9,40 +9,72 @@ sys.path.insert(0, str(repo_root / "packages"))
 from transform_core import get_data_dir, parse_usd, FILTER_THRESHOLDS
 
 
-def clean_wallets(wallets):
+def clean_tokens(tokens):
     threshold = FILTER_THRESHOLDS["debank_usd"]
-    return [w for w in wallets if parse_usd(w.get("USD Value")) >= threshold]
+    aggregated = {}
+    for token in tokens:
+        symbol = token.get("symbol")
+        if not symbol:
+            continue
+        
+        val = parse_usd(token.get("value") or "0")
+        amount_str = token.get("amount") or "0"
+        if isinstance(amount_str, str):
+            amount_str = amount_str.replace(",", "")
+        
+        try:
+            amount = float(amount_str)
+        except ValueError:
+            amount = 0.0
+            
+        if symbol not in aggregated:
+            aggregated[symbol] = {
+                "symbol": symbol,
+                "price": token.get("price"),
+                "amount": 0.0,
+                "value_usd": 0.0
+            }
+        
+        aggregated[symbol]["amount"] += amount
+        aggregated[symbol]["value_usd"] += val
+        
+    cleaned = []
+    for data in aggregated.values():
+        if data["value_usd"] >= threshold:
+            # Reconstruct token object
+            cleaned.append({
+                "symbol": data["symbol"],
+                "price": data["price"],
+                "amount": str(data["amount"]),
+                "value": f"${data['value_usd']:,.2f}"
+            })
+    return cleaned
 
 
 def clean_protocols(protocols):
     cleaned = []
     threshold = FILTER_THRESHOLDS["debank_usd"]
     for proto in protocols:
-        total_value = parse_usd(proto.get("usdValue"))
-        if total_value < threshold:
-            continue
-        # Filter protocol data entries with USD Value < threshold
-        data = proto.get("data", [])
-        valid_data = [
-            entry for entry in data if parse_usd(entry.get("USD Value")) >= threshold
-        ]
-        # Include protocol if it has valid data entries OR if the protocol itself has value
-        if valid_data or total_value >= threshold:
-            proto["data"] = valid_data
+        val = parse_usd(proto.get("value") or "0")
+        if val >= threshold:
             cleaned.append(proto)
     return cleaned
 
 
 def clean_data(data):
-    data["wallets"] = clean_wallets(data.get("wallets", []))
+    data["tokens"] = clean_tokens(data.get("tokens", []))
     data["protocols"] = clean_protocols(data.get("protocols", []))
     return data
 
 
 def extract_relevant(data):
     return {
-        "wallets": clean_wallets(data.get("wallets", [])),
+        "wallet": data.get("wallet", {}),
+        "social": data.get("social", {}),
+        "chains": data.get("chains", []),
+        "tokens": clean_tokens(data.get("tokens", [])),
         "protocols": clean_protocols(data.get("protocols", [])),
+        "nfts": data.get("nfts", []),
         "timestamp": data.get("timestamp"),
     }
 
@@ -54,10 +86,14 @@ if __name__ == "__main__":
     raw_path = data_dir / f"{td}_raw_debank.json"
     curated_path = data_dir / f"{td}_curated_debank.json"
 
-    with open(raw_path, "r", encoding="utf-8") as f:
-        raw_data = json.load(f)
+    if raw_path.exists():
+        with open(raw_path, "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
 
-    cleaned_data = extract_relevant(raw_data)
+        cleaned_data = extract_relevant(raw_data)
 
-    with open(curated_path, "w", encoding="utf-8") as f:
-        json.dump(cleaned_data, f, indent=2)
+        with open(curated_path, "w", encoding="utf-8") as f:
+            json.dump(cleaned_data, f, indent=2)
+        print(f"Curated data saved to {curated_path}")
+    else:
+        print(f"Raw file not found: {raw_path}")
