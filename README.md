@@ -78,7 +78,7 @@ All data follows a standardized pipeline:
 
 1. **Raw Extraction** → `{YYYY-MM-DD}_raw_<source>.json`
 2. **Cleaning/Processing** → `{YYYY-MM-DD}_curated_<source>.json`
-3. **Manual Data** (Optional) → `manual_balances.csv`
+3. **Manual Data** (Optional) → `_manual_balances.csv`
 4. **Integration** → `{YYYY-MM-DD}_portfolio.csv`
 
 ### Running Individual Components
@@ -112,11 +112,11 @@ python src/portfolio_app/integrators/portfolio_integration.py
 
 For assets that do not have an API (e.g., local bank accounts, cash, physical gold), you can maintain a CSV file.
 
-1. Create a `manual_balances.csv` file in your data directory (default: `data/`).
+1. Create a `_manual_balances.csv` file in your data directory (default: `data/`).
 2. Use the format provided in `data/manual_balances_template.csv`.
 3. The pipeline will automatically detect this file and integrate it into the final portfolio snapshot.
 
-Required columns in `manual_balances.csv`:
+Required columns in `_manual_balances.csv`:
 - `source`: The name of the source (e.g., "Bank", "Physical")
 - `category`: Asset category (e.g., "Cash", "Asset")
 - `asset`: Name of the asset (e.g., "BCA", "Gold")

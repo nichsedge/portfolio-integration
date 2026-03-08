@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "matplotlib>=3.10.8",
+#     "pandas>=3.0.1",
+#     "requests>=2.32.5",
+# ]
+# ///
 import os
 import glob
 import pandas as pd

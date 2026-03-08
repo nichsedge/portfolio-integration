@@ -295,7 +295,7 @@ def main():
     debank_raw_path = data_dir / f"{td}_raw_debank.json"
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
     alchemy_curated_path = data_dir / f"{td}_curated_alchemy.json"
-    manual_csv_path = data_dir / "manual_balances.csv"
+    manual_csv_path = data_dir / "_manual_balances.csv"
     output_csv_path = data_dir / f"{td}_portfolio.csv"
 
     # Load KSEI and DeBank raw data
