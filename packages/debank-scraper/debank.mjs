@@ -65,13 +65,13 @@ async function autoScroll(page) {
   page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
 
   console.log(`Navigating to ${PROFILE_URL}...`);
-  await page.goto(PROFILE_URL, { waitUntil: "domcontentloaded" });
+  await page.goto(PROFILE_URL, { waitUntil: "load" });
 
   try {
     // Wait for the main asset value to appear (using more robust selectors)
-    await page.waitForSelector("div[class*='HeaderInfo_totalAssetInner'], div[class*='HeaderInfo_totalAsset'], div[class*='HeaderInfo_totalAssetValue']", { timeout: 10000 });
+    await page.waitForSelector("div[class*='HeaderInfo_totalAssetInner'], div[class*='HeaderInfo_totalAsset'], div[class*='HeaderInfo_totalAssetValue']", { timeout: 30000 });
   } catch (e) {
-    console.warn("Timed out waiting for total assets selector after 10s. Continuing...");
+    console.warn("Timed out waiting for total assets selector after 30s. Continuing...");
   }
 
   // Click 'Unfold chains' if present to get full breakdown
@@ -148,19 +148,105 @@ async function autoScroll(page) {
     });
 
     // 3. Protocols
-    // Target both the summary grid cards and the detailed project sections
-    const protocolItems = document.querySelectorAll("[class*='ProjectCell_assetsItem'], [class*='Project_project'], [class*='ProjectCell_projectCell'], [class*='ProjectCell_assetsItemWrap']");
-    protocolItems.forEach(item => {
-      const nameEl = item.querySelector("[class*='ProjectCell_assetsItemNameText'], [class*='Project_projectName'], [class*='ProjectTitle_name'], [class*='ProjectCell_name']");
-      const valueEl = item.querySelector("[class*='ProjectCell_assetsItemWorth'], [class*='Project_projectValue'], [class*='projectTitle-number'], [class*='ProjectCell_value']");
+    // Target full project sections for detail
+    const protocolContainers = document.querySelectorAll("div[class*='Project_project__']");
+    protocolContainers.forEach(container => {
+      const nameEl = container.querySelector("[class*='ProjectTitle_projectTitle'], [class*='ProjectTitle_name'], [class*='Project_projectName']");
+      const valueEl = container.querySelector("[class*='projectTitle-number'], [class*='ProjectTitle_number'], [class*='Project_projectValue']");
+      
+      if (nameEl) {
+        let name = nameEl.innerText.trim().split('\n')[0].replace(/\$.*/, '').trim();
+        const value = valueEl ? valueEl.innerText.trim() : null;
+        
+        const protocolData = {
+          name,
+          value,
+          positions: []
+        };
+        
+        // Find position categories (e.g., Yield, Staked, Lending, Rewards)
+        const categories = container.querySelectorAll("div[class*='Panel_container__']");
+        categories.forEach(cat => {
+          const typeEl = cat.querySelector("div[class*='Panel_panelHead__']");
+          const type = typeEl ? typeEl.innerText.trim() : "Other";
+          
+          // Map headers to find Balance, Rewards, USD Value
+          const headers = Array.from(cat.querySelectorAll("div[class*='table_header__'] > div")).map(h => h.innerText.trim().toLowerCase());
+          const balanceIdx = headers.indexOf('balance');
+          const rewardsIdx = headers.indexOf('rewards');
+          const usdValueIdx = headers.lastIndexOf('usd value');
+
+          const rows = cat.querySelectorAll("div[class*='table_contentRow__']");
+          rows.forEach(row => {
+            const cells = Array.from(row.children);
+            if (cells.length >= 2) {
+              const poolName = cells[0].innerText.trim().replace(/\n/g, ' ');
+              const positionValue = usdValueIdx !== -1 && cells[usdValueIdx] ? cells[usdValueIdx].innerText.trim() : cells[cells.length - 1].innerText.trim();
+              
+              // Helper to get clean text from a cell
+              const getCleanedEntries = (cell) => {
+                if (!cell) return [];
+                const entries = [];
+                const tokenLinks = cell.querySelectorAll("a[class*='utils_detailLink__'], a[class*='TokenWallet_detailLink__']");
+                
+                if (tokenLinks.length === 0) {
+                   const text = cell.innerText.trim().replace(/\n/g, ' ');
+                   if (text) entries.push({ symbol: null, balance: text });
+                } else {
+                  tokenLinks.forEach(link => {
+                    const symbol = link.innerText.trim();
+                    const cellClone = cell.cloneNode(true);
+                    cellClone.querySelectorAll('button').forEach(btn => btn.remove());
+                    let balanceText = cellClone.innerText.trim().replace(/\n/g, ' ');
+                    balanceText = balanceText.replace(/\(\$.*?\)/g, '').trim();
+                    entries.push({ symbol, balance: balanceText });
+                  });
+                }
+                return entries;
+              };
+
+              const tokens = [];
+              if (balanceIdx !== -1) tokens.push(...getCleanedEntries(cells[balanceIdx]));
+              if (rewardsIdx !== -1) tokens.push(...getCleanedEntries(cells[rewardsIdx]));
+              
+              const uniqueTokens = [];
+              const seen = new Set();
+              tokens.forEach(t => {
+                const key = `${t.symbol}|${t.balance}`;
+                if (!seen.has(key)) {
+                  uniqueTokens.push(t);
+                  seen.add(key);
+                }
+              });
+
+              protocolData.positions.push({
+                type,
+                pool: poolName,
+                value: positionValue,
+                tokens: uniqueTokens
+              });
+            }
+          });
+        });
+        
+        if (name && name !== 'Wallet' && !data.protocols.find(p => p.name === name)) {
+          data.protocols.push(protocolData);
+        }
+      }
+    });
+
+    // Fallback for summary-only items
+    const summaryItems = document.querySelectorAll("[class*='ProjectCell_assetsItem'], [class*='ProjectCell_projectCell'], [class*='ProjectCell_assetsItemWrap']");
+    summaryItems.forEach(item => {
+      const nameEl = item.querySelector("[class*='ProjectCell_assetsItemNameText'], [class*='ProjectCell_name']");
+      const valueEl = item.querySelector("[class*='ProjectCell_assetsItemWorth'], [class*='ProjectCell_value']");
 
       if (nameEl) {
-        const name = nameEl.innerText.trim();
+        const name = nameEl.innerText.trim().split('\n')[0].replace(/\$.*/, '').trim();
         const value = valueEl ? valueEl.innerText.trim() : null;
 
-        // Filter out 'Wallet' as it's already handled, and avoid duplicates
         if (name && name !== 'Wallet' && !data.protocols.find(p => p.name === name)) {
-          data.protocols.push({ name, value });
+          data.protocols.push({ name, value, positions: [] });
         }
       }
     });

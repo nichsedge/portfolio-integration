@@ -156,22 +156,68 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
 
     # Process protocols
     for protocol in debank_data.get("protocols", []):
-        usd_value = parse_usd(protocol.get("value") or "0")
-        name = protocol.get("name", "Unknown")
-        if usd_value > 0:
-            standardized.append(
-                {
-                    "source": "DeBank",
-                    "category": "DeFi Protocol",
-                    "asset": name,
-                    "currency": "USD",
-                    "amount": 1.0,
-                    "value_idr": None,
-                    "value_usd": usd_value,
-                    "account": "DeBank Protocol",
-                    "details": f"Protocol: {name}",
-                }
-            )
+        protocol_name = protocol.get("name", "Unknown")
+        positions = protocol.get("positions", [])
+
+        if positions:
+            for pos in positions:
+                usd_value = parse_usd(pos.get("value") or "0")
+                if usd_value > 0:
+                    pool = pos.get("pool", "Unknown Pool")
+                    pos_type = pos.get("type", "Protocol")
+                    
+                    # Differentiate category based on type
+                    category = "DeFi Protocol"
+                    if pos_type == "Yield": category = "DeFi Yield"
+                    elif pos_type == "Staked": category = "DeFi Staked"
+                    elif pos_type == "Lending": category = "DeFi Lending"
+                    elif pos_type == "Borrow": category = "DeFi Debt"
+                    elif pos_type == "Rewards": category = "DeFi Rewards"
+                    elif pos_type == "Deposit": category = "DeFi Deposit"
+
+                    # Construct detailed asset name
+                    asset_name = f"{protocol_name} - {pool}"
+                    if pos_type and pos_type not in ["Other", "Protocol"]:
+                        asset_name = f"{protocol_name} ({pos_type}) - {pool}"
+
+                    # Clean up pool name if it contains too much noise (e.g. newline)
+                    asset_name = asset_name.replace("\n", " ").strip()
+
+                    # Construct details from tokens
+                    tokens = pos.get("tokens", [])
+                    token_list = [t.get("balance", "").replace("\n", " ").strip() for t in tokens if t.get("balance")]
+                    token_details = ", ".join(token_list)
+
+                    standardized.append(
+                        {
+                            "source": "DeBank",
+                            "category": category,
+                            "asset": asset_name,
+                            "currency": "USD",
+                            "amount": 1.0,
+                            "value_idr": None,
+                            "value_usd": usd_value,
+                            "account": "DeBank Protocol",
+                            "details": f"Protocol: {protocol_name}, Position: {pos_type}, Tokens: {token_details}",
+                        }
+                    )
+        else:
+            # Fallback to summary if no positions extracted
+            usd_value = parse_usd(protocol.get("value") or "0")
+            if usd_value > 0:
+                standardized.append(
+                    {
+                        "source": "DeBank",
+                        "category": "DeFi Protocol",
+                        "asset": protocol_name,
+                        "currency": "USD",
+                        "amount": 1.0,
+                        "value_idr": None,
+                        "value_usd": usd_value,
+                        "account": "DeBank Protocol",
+                        "details": f"Protocol: {protocol_name} (Summary)",
+                    }
+                )
 
     # Process NFTs (minimal summary)
     for nft in debank_data.get("nfts", []):

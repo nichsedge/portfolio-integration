@@ -55,8 +55,20 @@ def clean_protocols(protocols):
     cleaned = []
     threshold = FILTER_THRESHOLDS["debank_usd"]
     for proto in protocols:
-        val = parse_usd(proto.get("value") or "0")
+        positions = proto.get("positions", [])
+        
+        # Calculate total value, prioritizing the top-level value if present
+        if proto.get("value"):
+            val = parse_usd(proto.get("value"))
+        elif positions:
+            # Sum up position values if top-level is missing
+            val = sum(parse_usd(pos.get("value") or "0") for pos in positions)
+        else:
+            val = 0.0
+
         if val >= threshold:
+            # If we have positions, we might want to filter them too, 
+            # but for now we keep the protocol object and let the integrator handle it.
             cleaned.append(proto)
     return cleaned
 
