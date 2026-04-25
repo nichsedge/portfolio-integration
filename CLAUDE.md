@@ -37,11 +37,11 @@ uv sync
 cd packages/debank-scraper && npm install && cd ../..
 
 # Run full pipeline (fetch + transform + integrate)
-uv run pipeline_runner
+uv run run-all
 
 # Pipeline options
-uv run pipeline_runner --fetch-only   # Only fetch raw data
-uv run pipeline_runner --integrate    # Skip fetching, just transform/integrate
+uv run fetch-only   # Only fetch raw data
+uv run integrate-only    # Skip fetching, just transform/integrate
 
 # Individual fetchers
 cd packages/ksei-client && uv run examples/fetch_and_dump_portfolios.py
