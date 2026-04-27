@@ -211,6 +211,23 @@ def main():
             print("\nPipeline failed during integration. Aborting.")
             sys.exit(1)
 
+        # Step 4: Visualize
+        print("--- Step 4: Generate Insights ---")
+        insights_path = (
+            portfolio_app_path
+            / "src/portfolio_app/generate_insights.py"
+        )
+        if insights_path.exists():
+            if not _run_blocking_step(
+                "Insights Generation",
+                str(repo_root),
+                [sys.executable, str(insights_path)]
+            ):
+                print("\nPipeline failed during insights generation. Aborting.")
+                sys.exit(1)
+        else:
+            print(f"⚠ Skipping Insights Generation: {insights_path} not found")
+
     print("\n✨ Pipeline completed successfully!")
 
 

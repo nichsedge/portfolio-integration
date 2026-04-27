@@ -9,6 +9,7 @@ This is a Python monorepo managed with `uv` that implements a 3-stage ETL pipeli
 1. **Extract:** Fetch raw data from sources (KSEI, DeBank, Binance, Alchemy, Solana, QAZWA, Hyperliquid) and read manual entries from `_manual_balances.csv`
 2. **Transform:** Clean and filter each source into a curated format
 3. **Load:** Integrate all sources into a unified portfolio CSV
+4. **Visualize:** Generate portfolio insights and plots (Step 4 of pipeline)
 
 ### Workspace Structure
 

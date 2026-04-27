@@ -1,11 +1,3 @@
-# /// script
-# requires-python = ">=3.12"
-# dependencies = [
-#     "matplotlib>=3.10.8",
-#     "pandas>=3.0.1",
-#     "requests>=2.32.5",
-# ]
-# ///
 import os
 import glob
 import pandas as pd
@@ -15,8 +7,8 @@ import matplotlib.ticker as ticker
 import requests
 
 # Constants
-DATA_DIR = "data"
-OUTPUT_DIR = "data"
+DATA_DIR = os.getenv("PORTFOLIO_DATA_DIR") or os.getenv("DATA_DIR") or "data"
+OUTPUT_DIR = DATA_DIR
 
 def get_exchange_rate():
     try:
