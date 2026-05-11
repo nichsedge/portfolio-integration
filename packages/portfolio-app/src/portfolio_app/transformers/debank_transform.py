@@ -92,8 +92,12 @@ def extract_relevant(data):
 
 
 if __name__ == "__main__":
-    # Example usage
-    td = pendulum.now().format("YYYY-MM-DD")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Date in YYYY-MM-DD format")
+    args = parser.parse_args()
+
+    td = args.date or pendulum.now().format("YYYY-MM-DD")
     data_dir = get_data_dir()
     raw_path = data_dir / f"{td}_raw_debank.json"
     curated_path = data_dir / f"{td}_curated_debank.json"

@@ -128,17 +128,29 @@ def plot_allocation_latest(df):
     latest_date = df['date'].max()
     latest_df = df[df['date'] == latest_date]
     
-    # By Category
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+    
+    # 1. By Category
     category_grouped = latest_df.groupby('category')['total_value_idr'].sum().sort_values(ascending=False)
     total = category_grouped.sum()
     legend_labels = [f'{l} ({v/total:.1%})' for l, v in category_grouped.items()]
     
-    plt.figure(figsize=(12, 8))
-    wedges, _ , autotexts = plt.pie(category_grouped, autopct='%1.1f%%', startangle=140)
-    plt.legend(wedges, legend_labels, title="Categories", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
-    plt.title(f'Asset Allocation by Category ({latest_date.strftime("%Y-%m-%d")})', fontsize=14)
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, '_vis_allocation_by_category.png'))
+    wedges1, _, autotexts1 = ax1.pie(category_grouped, autopct='%1.1f%%', startangle=140)
+    ax1.legend(wedges1, legend_labels, title="Categories", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
+    ax1.set_title(f'Asset Allocation by Category', fontsize=14, fontweight='bold')
+    
+    # 2. By Currency
+    currency_grouped = latest_df.groupby('currency')['total_value_idr'].sum().sort_values(ascending=False)
+    total_currency = currency_grouped.sum()
+    currency_legend_labels = [f'{l} ({v/total_currency:.1%})' for l, v in currency_grouped.items()]
+
+    wedges2, _, autotexts2 = ax2.pie(currency_grouped, autopct='%1.1f%%', startangle=140)
+    ax2.legend(wedges2, currency_legend_labels, title="Currencies", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
+    ax2.set_title(f'Asset Allocation by Currency', fontsize=14, fontweight='bold')
+    
+    plt.suptitle(f'Portfolio Allocation ({latest_date.strftime("%Y-%m-%d")})', fontsize=18, fontweight='bold', y=0.95)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.savefig(os.path.join(OUTPUT_DIR, '_vis_allocation_latest.png'))
     plt.close()
 
 def plot_value_over_time_by_category(df):

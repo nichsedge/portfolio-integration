@@ -15,6 +15,7 @@ import argparse
 import os
 import subprocess
 import sys
+import pendulum
 from pathlib import Path
 from typing import Dict, Any  # Added for process dictionary
 
@@ -105,22 +106,26 @@ def main():
     parser.add_argument(
         "--integrate", action="store_true", help="Skip fetching, just integrate"
     )
+    parser.add_argument(
+        "--backfill", action="store_true", help="Generate for all dates that exist in data/"
+    )
     args = parser.parse_args()
 
     # Get repo root path
     repo_root = Path(__file__).resolve().parents[4]
     default_data_dir = repo_root / "data"
 
-    data_dir = (
+    data_dir_path = (
         os.getenv("PORTFOLIO_DATA_DIR")
         or os.getenv("DATA_DIR")
         or str(default_data_dir)
     )
+    data_dir = Path(data_dir_path)
 
     print("🚀 Portfolio Integration Pipeline")
     print(f"Data directory: {data_dir}\n")
 
-    if not args.integrate:
+    if not args.integrate and not args.backfill:
         # Step 1: Fetch Raw Data (Parallelized)
         print("--- Step 1: Fetch Raw Data ---")
 
@@ -159,60 +164,86 @@ def main():
             sys.exit(1)
 
     if not args.fetch_only:
-        # Step 2: Transform Data
-        print("--- Step 2: Transform Data ---")
+        # Step 2 & 3: Transform and Integrate
+        dates_to_process = [pendulum.now().format("YYYY-MM-DD")]
+        
+        if args.backfill:
+            print("--- Backfill Mode: Identifying dates ---")
+            import re
+            
+            # Use Path.glob for better compatibility
+            # Pattern: YYYY-MM-DD_raw*.json or YYYY-MM-DD-raw*.json
+            raw_files = list(data_dir.glob("*_raw_*.json")) + list(data_dir.glob("*-raw-*.json"))
+            found_dates = set()
+            for f in raw_files:
+                # Match YYYY-MM-DD followed by _raw or -raw
+                match = re.search(r"(\d{4}-\d{2}-\d{2})[_|-]raw", f.name)
+                if match:
+                    found_dates.add(match.group(1))
+            
+            if not found_dates:
+                print("No raw data files found for backfill.")
+                sys.exit(0)
+                
+            dates_to_process = sorted(list(found_dates))
+            print(f"Found {len(dates_to_process)} dates to process: {', '.join(dates_to_process)}")
 
         portfolio_app_path = repo_root / "packages/portfolio-app"
 
-        # Transform - execute python files directly
-        transform_files = [
-            (
-                "KSEI transform",
-                portfolio_app_path / "src/portfolio_app/transformers/ksei_transform.py",
-            ),
-            (
-                "DeBank transform",
-                portfolio_app_path
-                / "src/portfolio_app/transformers/debank_transform.py",
-            ),
-            (
-                "Binance transform",
-                portfolio_app_path
-                / "src/portfolio_app/transformers/binance_transform.py",
-            ),
-            (
-                "Alchemy transform",
-                portfolio_app_path
-                / "src/portfolio_app/transformers/alchemy_transform.py",
-            ),
-        ]
+        for current_date in dates_to_process:
+            print(f"\nProcessing date: {current_date}")
+            
+            # Step 2: Transform Data
+            print(f"--- Step 2: Transform Data ({current_date}) ---")
 
-        for name, script_path in transform_files:
-            if script_path.exists():
-                if not _run_blocking_step(
-                    name, str(script_path.parent), [sys.executable, str(script_path)]
-                ):
-                    print(f"\nPipeline failed during {name}. Aborting.")
-                    sys.exit(1)
-            else:
-                print(f"⚠ Skipping {name}: script not found")
+            # Transform - execute python files directly
+            transform_files = [
+                (
+                    "KSEI transform",
+                    portfolio_app_path / "src/portfolio_app/transformers/ksei_transform.py",
+                ),
+                (
+                    "DeBank transform",
+                    portfolio_app_path
+                    / "src/portfolio_app/transformers/debank_transform.py",
+                ),
+                (
+                    "Binance transform",
+                    portfolio_app_path
+                    / "src/portfolio_app/transformers/binance_transform.py",
+                ),
+                (
+                    "Alchemy transform",
+                    portfolio_app_path
+                    / "src/portfolio_app/transformers/alchemy_transform.py",
+                ),
+            ]
 
-        # Step 3: Integrate
-        print("--- Step 3: Integrate ---")
-        integrator_path = (
-            portfolio_app_path
-            / "src/portfolio_app/integrators/portfolio_integration.py"
-        )
-        if not _run_blocking_step(
-            "Integration",
-            str(integrator_path.parent),
-            [sys.executable, str(integrator_path)],
-        ):
-            print("\nPipeline failed during integration. Aborting.")
-            sys.exit(1)
+            for name, script_path in transform_files:
+                if script_path.exists():
+                    if not _run_blocking_step(
+                        name, str(script_path.parent), [sys.executable, str(script_path), "--date", current_date]
+                    ):
+                        print(f"\nPipeline failed during {name} for {current_date}. Continuing to next step...")
+                        # We don't abort the whole backfill if one transform fails for one source
+                else:
+                    print(f"⚠ Skipping {name}: script not found")
+
+            # Step 3: Integrate
+            print(f"--- Step 3: Integrate ({current_date}) ---")
+            integrator_path = (
+                portfolio_app_path
+                / "src/portfolio_app/integrators/portfolio_integration.py"
+            )
+            if not _run_blocking_step(
+                "Integration",
+                str(integrator_path.parent),
+                [sys.executable, str(integrator_path), "--date", current_date],
+            ):
+                print(f"\nPipeline failed during integration for {current_date}. Continuing...")
 
         # Step 4: Visualize
-        print("--- Step 4: Generate Insights ---")
+        print("\n--- Step 4: Generate Insights ---")
         insights_path = (
             portfolio_app_path
             / "src/portfolio_app/generate_insights.py"
@@ -235,7 +266,8 @@ def fetch_entrypoint():
     """Entry point for fetch command."""
     import sys
 
-    sys.argv = [sys.argv[0], "--fetch-only"]
+    if "--fetch-only" not in sys.argv:
+        sys.argv.append("--fetch-only")
     main()
 
 
@@ -243,7 +275,8 @@ def integrate_entrypoint():
     """Entry point for integrate command."""
     import sys
 
-    sys.argv = [sys.argv[0], "--integrate"]
+    if "--integrate" not in sys.argv:
+        sys.argv.append("--integrate")
     main()
 
 

@@ -55,7 +55,7 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             standardized.append(
                 {
                     "source": "KSEI",
-                    "category": "Cash",
+                    "category": "IDR/stables",
                     "asset": entry.get("bank", "Unknown"),
                     "currency": currency,
                     "amount": entry.get("saldo", 0),
@@ -336,8 +336,13 @@ def standardize_manual_data(manual_data: List[Dict[str, Any]]) -> List[Dict[str,
 
 def main():
     """Main function to integrate KSEI and DeBank data into CSV."""
-    # Get today's date
-    td = pendulum.now().format("YYYY-MM-DD")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Date in YYYY-MM-DD format")
+    args = parser.parse_args()
+
+    # Get date
+    td = args.date or pendulum.now().format("YYYY-MM-DD")
 
     # File paths
     data_dir = get_data_dir()
@@ -475,7 +480,7 @@ def main():
         item["value_usd"] for item in all_data if item["value_usd"] is not None
     )
 
-    print(f"Portfolio integration completed!")
+    print(f"Portfolio integration completed for date {td}!")
     print(f"Output: {output_csv_path}")
     print(f"Total assets: {len(all_data)}")
 

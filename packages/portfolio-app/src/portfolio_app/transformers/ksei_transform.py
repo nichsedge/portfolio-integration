@@ -60,8 +60,13 @@ def clean_json(data):
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Date in YYYY-MM-DD format")
+    args = parser.parse_args()
+
     # Load input from file
-    td = pendulum.now().format("YYYY-MM-DD")
+    td = args.date or pendulum.now().format("YYYY-MM-DD")
     data_dir = get_data_dir()
     raw_path = data_dir / f"{td}_raw_ksei.json"
     curated_path = data_dir / f"{td}_curated_ksei.json"

@@ -15,8 +15,8 @@ def clean_alchemy_data(raw_data):
     threshold = FILTER_THRESHOLDS.get("USD", 5)
 
     for token in raw_data:
-        balance = token.get("balance", 0)
-        value_usd = token.get("value_usd", 0)
+        balance = token.get("balance") or 0
+        value_usd = token.get("value_usd") or 0
 
         # Only include tokens with non-zero balance and value above threshold
         if balance > 0 and value_usd >= threshold:
@@ -41,8 +41,12 @@ def clean_alchemy_data(raw_data):
 
 
 if __name__ == "__main__":
-    # Main execution
-    td = pendulum.now().format("YYYY-MM-DD")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Date in YYYY-MM-DD format")
+    args = parser.parse_args()
+
+    td = args.date or pendulum.now().format("YYYY-MM-DD")
     data_dir = get_data_dir()
     raw_path = data_dir / f"{td}_raw_alchemy.json"
     curated_path = data_dir / f"{td}_curated_alchemy.json"
