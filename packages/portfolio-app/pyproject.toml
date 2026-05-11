@@ -23,6 +23,7 @@ dependencies = [
     "requests>=2.31.0",
     "matplotlib>=3.10.8",
     "portfolio-transform-core",
+    "rich>=15.0.0",
 ]
 
 [build-system]

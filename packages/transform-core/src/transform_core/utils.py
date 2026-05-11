@@ -4,6 +4,7 @@ Utility functions for portfolio data transformation.
 
 import os
 import re
+import requests
 from pathlib import Path
 from typing import Union
 
@@ -57,3 +58,15 @@ def parse_usd(value: Union[str, int, float, None]) -> float:
         except ValueError:
             return 0.0
     return 0.0
+
+
+def get_exchange_rate() -> float:
+    """Fetch latest USD to IDR exchange rate with fallback."""
+    try:
+        response = requests.get('https://hexarate.paikama.co/api/rates/USD/IDR/latest', timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return float(data['data']['mid'])
+    except Exception as e:
+        print(f"Error fetching exchange rate: {e}. Fallback to 15500.")
+        return 15500.0
