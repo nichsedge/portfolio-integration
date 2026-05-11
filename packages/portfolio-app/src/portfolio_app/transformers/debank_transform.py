@@ -10,7 +10,7 @@ from transform_core import get_data_dir, parse_usd, FILTER_THRESHOLDS
 
 
 def clean_tokens(tokens):
-    threshold = FILTER_THRESHOLDS["debank_usd"]
+    threshold = FILTER_THRESHOLDS["USD"]
     aggregated = {}
     for token in tokens:
         symbol = token.get("symbol")
@@ -53,7 +53,7 @@ def clean_tokens(tokens):
 
 def clean_protocols(protocols):
     cleaned = []
-    threshold = FILTER_THRESHOLDS["debank_usd"]
+    threshold = FILTER_THRESHOLDS["USD"]
     for proto in protocols:
         positions = proto.get("positions", [])
         

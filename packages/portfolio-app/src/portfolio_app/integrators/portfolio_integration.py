@@ -22,12 +22,16 @@ from transform_core import get_data_dir, parse_usd
 
 
 STABLE_COINS = {"USDT", "USDC", "DAI", "FDUSD", "TUSD", "BUSD", "PYUSD", "USDP"}
+GOLD_ASSETS = {"PAXG", "XAUT"}
 
 
 def get_standard_category(category: str, asset: str) -> str:
-    """Return the correct category, separating stablecoins from crypto/defi."""
-    if category in ["Cryptocurrency", "DeFi Protocol"] and asset in STABLE_COINS:
-        return "Stablecoin"
+    """Return the correct category, separating stablecoins and gold from crypto/defi."""
+    if category in ["Cryptocurrency", "DeFi Protocol"]:
+        if asset in STABLE_COINS:
+            return "USD/stables"
+        if asset in GOLD_ASSETS:
+            return "Gold"
     return category
 
 

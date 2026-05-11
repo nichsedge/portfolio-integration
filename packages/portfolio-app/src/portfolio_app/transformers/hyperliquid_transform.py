@@ -203,7 +203,7 @@ def fetch_and_process_hyperliquid_data(wallet_address: str) -> Dict[str, Any]:
     positions = fetch_vault_positions(wallet_address)
     investments = []
 
-    threshold = FILTER_THRESHOLDS.get("hyperliquid_usd", 10)
+    threshold = FILTER_THRESHOLDS.get("USD", 5)
 
     for position in positions:
         standardized = standardize_vault_position(position, wallet_address)

@@ -6,15 +6,19 @@ from pathlib import Path
 # Import from transform-core
 repo_root = Path(__file__).parents[4]
 sys.path.insert(0, str(repo_root / "packages"))
-from transform_core import get_data_dir
+from transform_core import get_data_dir, FILTER_THRESHOLDS
 
 
 def clean_binance_data(raw_data):
     """Clean and extract relevant Binance data."""
+    assets = raw_data.get("assets", [])
+    threshold = FILTER_THRESHOLDS.get("USD", 5)
+    filtered_assets = [a for a in assets if float(a.get("value_usd", 0)) >= threshold]
+
     return {
         "timestamp": raw_data.get("timestamp"),
-        "total_usd": raw_data.get("total_usd"),
-        "assets": raw_data.get("assets", []),
+        "total_usd": sum(float(a.get("value_usd", 0)) for a in filtered_assets),
+        "assets": filtered_assets,
     }
 
 

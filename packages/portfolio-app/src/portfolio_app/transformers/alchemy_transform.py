@@ -6,19 +6,20 @@ from pathlib import Path
 # Import from transform-core
 repo_root = Path(__file__).parents[4]
 sys.path.insert(0, str(repo_root / "packages"))
-from transform_core import get_data_dir
+from transform_core import get_data_dir, FILTER_THRESHOLDS
 
 
 def clean_alchemy_data(raw_data):
     """Clean and extract relevant Alchemy data."""
     assets = []
+    threshold = FILTER_THRESHOLDS.get("USD", 5)
 
     for token in raw_data:
         balance = token.get("balance", 0)
         value_usd = token.get("value_usd", 0)
 
-        # Only include tokens with non-zero balance
-        if balance > 0:
+        # Only include tokens with non-zero balance and value above threshold
+        if balance > 0 and value_usd >= threshold:
             assets.append(
                 {
                     "address": token.get("address"),

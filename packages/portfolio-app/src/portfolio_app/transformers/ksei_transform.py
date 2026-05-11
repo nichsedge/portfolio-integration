@@ -10,11 +10,11 @@ from transform_core import get_data_dir, FILTER_THRESHOLDS
 
 
 def is_valid_cash(entry):
-    return entry.get("saldoIdr", 0) >= FILTER_THRESHOLDS["ksei_idr"]
+    return entry.get("saldoIdr", 0) >= FILTER_THRESHOLDS["IDR"]
 
 
 def is_valid_investment(entry):
-    return entry.get("nilaiInvestasi", 0) >= FILTER_THRESHOLDS["ksei_idr"]
+    return entry.get("nilaiInvestasi", 0) >= FILTER_THRESHOLDS["IDR"]
 
 
 def clean_json(data):
