@@ -106,6 +106,9 @@ def main():
     parser.add_argument(
         "--backfill", action="store_true", help="Generate for all dates that exist in data/"
     )
+    parser.add_argument(
+        "--skip-manual", action="store_true", help="Skip manual balances in integration"
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[4]
@@ -138,6 +141,11 @@ def main():
         if alchemy_path.exists():
             processes["Alchemy"] = _start_non_blocking_step("Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"])
 
+        # Hyperliquid is both fetcher and transformer for now
+        hl_path = repo_root / "packages/portfolio-app/src/portfolio_app/transformers/hyperliquid_transform.py"
+        if hl_path.exists():
+            processes["Hyperliquid"] = _start_non_blocking_step("Hyperliquid", str(hl_path.parent), [sys.executable, str(hl_path)])
+
         if not _wait_for_steps(processes):
             print("\nPipeline failed during data fetching. Aborting.")
             sys.exit(1)
@@ -148,10 +156,11 @@ def main():
         if args.backfill:
             print("--- Backfill Mode: Identifying dates ---")
             import re
+            # Improved regex to find dates in all raw files
             raw_files = list(data_dir.glob("*_raw_*.json")) + list(data_dir.glob("*-raw-*.json"))
             found_dates = set()
             for f in raw_files:
-                match = re.search(r"(\d{4}-\d{2}-\d{2})[_|-]raw", f.name)
+                match = re.search(r"(\d{4}-\d{2}-\d{2})", f.name)
                 if match:
                     found_dates.add(match.group(1))
             
@@ -168,23 +177,23 @@ def main():
             print(f"\nProcessing date: {current_date}")
             print(f"--- Step 2: Transform Data ({current_date}) ---")
 
-            transform_files = [
-                ("KSEI transform", portfolio_app_path / "src/portfolio_app/transformers/ksei_transform.py"),
-                ("DeBank transform", portfolio_app_path / "src/portfolio_app/transformers/debank_transform.py"),
-                ("Binance transform", portfolio_app_path / "src/portfolio_app/transformers/binance_transform.py"),
-                ("Alchemy transform", portfolio_app_path / "src/portfolio_app/transformers/alchemy_transform.py"),
-            ]
-
-            for name, script_path in transform_files:
-                if script_path.exists():
-                    _run_blocking_step(name, str(script_path.parent), [sys.executable, str(script_path), "--date", current_date])
-                else:
-                    print(f"⚠ Skipping {name}: script not found")
+            # Dynamically find all transformers
+            transformers_dir = portfolio_app_path / "src/portfolio_app/transformers"
+            transform_scripts = sorted(list(transformers_dir.glob("*_transform.py")))
+            
+            for script_path in transform_scripts:
+                name = script_path.stem.replace("_", " ").title()
+                _run_blocking_step(name, str(script_path.parent), [sys.executable, str(script_path), "--date", current_date])
 
             print(f"--- Step 3: Integrate ({current_date}) ---")
             integrator_path = portfolio_app_path / "src/portfolio_app/integrators/portfolio_integration.py"
+            
+            integrate_cmd = [sys.executable, str(integrator_path), "--date", current_date]
+            if args.skip_manual:
+                integrate_cmd.append("--skip-manual")
+                
             # Set verbose=True for integration to show the rich summary
-            _run_blocking_step("Integration", str(integrator_path.parent), [sys.executable, str(integrator_path), "--date", current_date], verbose=True)
+            _run_blocking_step("Integration", str(integrator_path.parent), integrate_cmd, verbose=True)
 
         print("\n--- Step 4: Generate Insights ---")
         insights_path = portfolio_app_path / "src/portfolio_app/generate_insights.py"

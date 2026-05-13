@@ -15,10 +15,17 @@ def clean_binance_data(raw_data):
     threshold = FILTER_THRESHOLDS.get("USD", 5)
     filtered_assets = [a for a in assets if float(a.get("value_usd", 0)) >= threshold]
 
+    cleaned_assets = []
+    for a in filtered_assets:
+        asset = a.copy()
+        if "amount" in asset:
+            asset["quantity"] = asset.pop("amount")
+        cleaned_assets.append(asset)
+
     return {
         "timestamp": raw_data.get("timestamp"),
         "total_usd": sum(float(a.get("value_usd", 0)) for a in filtered_assets),
-        "assets": filtered_assets,
+        "assets": cleaned_assets,
     }
 
 

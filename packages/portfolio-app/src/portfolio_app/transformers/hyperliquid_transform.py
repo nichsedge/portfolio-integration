@@ -145,7 +145,8 @@ def standardize_vault_position(
         "category": "Vault Position",
         "asset": vault_name,
         "currency": "USD",
-        "amount": 1.0,  # Representing share units
+        "quantity": 1.0,  # Representing share units
+        "price": usd_value,
         "value_idr": None,
         "value_usd": usd_value,
         "account": f"{vault_name} ({vault_address[:8]}...)",
@@ -177,7 +178,8 @@ def standardize_user_vault(
                 "category": "Vault Management",
                 "asset": vault_name,
                 "currency": "USD",
-                "amount": 0.0,
+                "quantity": 0.0,
+                "price": parse_usd_value(vault.get("totalValueUsd", 0)),
                 "value_idr": None,
                 "value_usd": parse_usd_value(vault.get("totalValueUsd", 0)),
                 "account": f"Manager: {wallet_address[:8]}...",
@@ -232,12 +234,13 @@ def fetch_and_process_hyperliquid_data(wallet_address: str) -> Dict[str, Any]:
 
 
 def save_hyperliquid_data(
-    wallet_address: str, output_dir: Path = None
+    wallet_address: str, date_str: str = None, output_dir: Path = None
 ) -> Dict[str, Any]:
     """Fetch and save Hyperliquid data to JSON files.
 
     Args:
         wallet_address: EVM wallet address
+        date_str: Date string for filenames
         output_dir: Output directory (defaults to data dir from env)
 
     Returns:
@@ -246,32 +249,65 @@ def save_hyperliquid_data(
     if output_dir is None:
         output_dir = get_data_dir()
 
-    data = fetch_and_process_hyperliquid_data(wallet_address)
+    if date_str is None:
+        date_str = pendulum.now("UTC").to_date_string()
 
-    # Use ISO date format
-    date_str = pendulum.now("UTC").to_date_string()
-
-    # Save raw data
     raw_path = output_dir / f"{date_str}_raw_hyperliquid.json"
-    with open(raw_path, "w", encoding="utf-8") as f:
-        json.dump(data["raw"], f, indent=2)
-
-    # Save cleaned data (same as standardized for now)
     cleaned_path = output_dir / f"{date_str}_curated_hyperliquid.json"
+
+    # If raw file exists, load it. Otherwise fetch if it's today.
+    data = None
+    if raw_path.exists():
+        print(f"Loading existing raw data from {raw_path}")
+        with open(raw_path, "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+            # Re-process standardized data from raw
+            investments = []
+            threshold = FILTER_THRESHOLDS.get("USD", 5)
+            for position in raw_data.get("positions", []):
+                standardized = standardize_vault_position(position, wallet_address)
+                if standardized["value_usd"] >= threshold:
+                    investments.append(standardized)
+            
+            created_vaults = []
+            for vault in raw_data.get("user_vaults", []):
+                created_vaults.extend(standardize_user_vault(vault, wallet_address))
+            
+            data = {
+                "raw": raw_data,
+                "standardized": investments + created_vaults
+            }
+    else:
+        # Only fetch if it's "today" (or if no date provided)
+        today = pendulum.now("UTC").to_date_string()
+        if date_str == today:
+            data = fetch_and_process_hyperliquid_data(wallet_address)
+            # Save raw data
+            with open(raw_path, "w", encoding="utf-8") as f:
+                json.dump(data["raw"], f, indent=2)
+            print(f"Fetched and saved raw data to {raw_path}")
+        else:
+            print(f"Hyperliquid raw data not found at {raw_path}, skipping...")
+            return None
+
+    # Save cleaned data
     with open(cleaned_path, "w", encoding="utf-8") as f:
         json.dump({
             "timestamp": pendulum.now("UTC").to_iso8601_string().replace("+00:00", "Z"),
             "vault_positions": data["standardized"]
         }, f, indent=2)
 
-    print(f"Saved raw data to {raw_path}")
     print(f"Saved curated data to {cleaned_path}")
-
     return data
 
 
 def main():
     """Main entry point - fetch wallet address from environment and save data."""
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Date in YYYY-MM-DD format")
+    args = parser.parse_args()
+
     wallet_address = os.getenv("HYPERLIQUID_WALLET_ADDRESS")
 
     if not wallet_address:
@@ -279,8 +315,9 @@ def main():
         print("Set it with: export HYPERLIQUID_WALLET_ADDRESS=0x...")
         return
 
-    data = save_hyperliquid_data(wallet_address)
-    print(f"\nTotal vault positions found: {len(data['standardized'])}")
+    data = save_hyperliquid_data(wallet_address, date_str=args.date)
+    if data:
+        print(f"\nTotal vault positions found: {len(data['standardized'])}")
 
 
 if __name__ == "__main__":

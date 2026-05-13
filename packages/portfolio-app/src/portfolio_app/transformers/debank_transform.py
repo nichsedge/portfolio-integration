@@ -45,7 +45,7 @@ def clean_tokens(tokens):
             cleaned.append({
                 "symbol": data["symbol"],
                 "price": data["price"],
-                "amount": str(data["amount"]),
+                "quantity": str(data["amount"]),
                 "value": f"${data['value_usd']:,.2f}"
             })
     return cleaned

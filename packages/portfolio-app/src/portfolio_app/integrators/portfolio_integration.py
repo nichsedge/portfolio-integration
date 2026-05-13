@@ -31,7 +31,7 @@ GOLD_ASSETS = {"PAXG", "XAUT"}
 
 def get_standard_category(category: str, asset: str) -> str:
     """Return the correct category, separating stablecoins and gold from crypto/defi."""
-    if category in ["Cryptocurrency", "DeFi Protocol"]:
+    if category in ["Cryptocurrency", "DeFi Protocol", "Vault Position"]:
         if asset in STABLE_COINS:
             return "Cash"
         if asset in GOLD_ASSETS:
@@ -58,6 +58,8 @@ def get_asset_class(category: str) -> str:
         "DeFi Deposit": "Crypto",
         "Gold": "Commodities",
         "NFT": "Collectibles",
+        "Vault Position": "Crypto",
+        "Vault Management": "Crypto",
     }
     return mapping.get(category, "Other")
 
@@ -77,16 +79,24 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 value_idr = None
                 value_usd = entry.get("saldo", 0)
 
+            bank_code = entry.get("bank", "Unknown")
+            asset_name = bank_code
+            if bank_code == "PRMT2":
+                asset_name = "Ajaib RDN"
+            elif bank_code == "JAGO1":
+                asset_name = "Stockbit RDN"
+
             standardized.append({
                 "source": "KSEI",
                 "category": "Cash",
-                "asset": entry.get("bank", "Unknown"),
+                "asset": asset_name,
                 "currency": currency,
-                "amount": entry.get("saldo", 0),
+                "quantity": entry.get("saldo", 0),
+                "price": 1.0,
                 "value_idr": value_idr,
                 "value_usd": value_usd,
                 "account": entry.get("rekening", ""),
-                "details": f"Bank: {entry.get('bank', '')}, Account: {entry.get('rekening', '')}",
+                "details": f"Bank: {bank_code}, Account: {entry.get('rekening', '')}",
             })
 
     # Process equity
@@ -97,11 +107,12 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "category": "Equity",
                 "asset": entry.get("efek", "Unknown").split(" - ")[0],
                 "currency": "IDR",
-                "amount": entry.get("jumlah", 0),
+                "quantity": entry.get("jumlah", 0),
+                "price": entry.get("harga", 0),
                 "value_idr": entry.get("nilaiInvestasi", 0),
                 "value_usd": None,
                 "account": entry.get("rekening", ""),
-                "details": f"Stock: {entry.get('efek', '')}, Broker: {entry.get('partisipan', '')}, Price: {entry.get('harga', 0)}",
+                "details": f"Stock: {entry.get('efek', '')}, Broker: {entry.get('partisipan', '')}",
             })
 
     # Process mutual funds
@@ -117,7 +128,8 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "category": category,
                 "asset": asset_name,
                 "currency": "IDR",
-                "amount": entry.get("jumlah", 0),
+                "quantity": entry.get("jumlah", 0),
+                "price": entry.get("nilaiInvestasi", 0) / entry.get("jumlah") if entry.get("jumlah") else 0,
                 "value_idr": entry.get("nilaiInvestasi", 0),
                 "value_usd": None,
                 "account": entry.get("rekening", ""),
@@ -132,7 +144,8 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "category": "Bond",
                 "asset": entry.get("efek", "Unknown"),
                 "currency": "IDR",
-                "amount": entry.get("jumlah", 0),
+                "quantity": entry.get("jumlah", 0),
+                "price": entry.get("nilaiInvestasi", 0) / entry.get("jumlah") if entry.get("jumlah") else 0,
                 "value_idr": entry.get("nilaiInvestasi", 0),
                 "value_usd": None,
                 "account": entry.get("rekening", ""),
@@ -152,7 +165,7 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
         usd_value = parse_usd(token.get("value") or "0")
         if usd_value > 0:
             symbol = token.get("symbol", "Unknown")
-            amount_str = token.get("amount") or "0"
+            amount_str = token.get("quantity") or token.get("amount") or "0"
             if isinstance(amount_str, str):
                 amount_str = amount_str.replace(",", "")
             
@@ -163,18 +176,19 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
 
             if symbol not in token_aggregation:
                 token_aggregation[symbol] = {
-                    "source": "DeBank",
+                    "source": "EVM Wallet",
                     "category": get_standard_category("Cryptocurrency", symbol),
                     "asset": symbol,
                     "currency": "USD",
-                    "amount": 0.0,
+                    "quantity": 0.0,
+                    "price": token.get("price", 0),
                     "value_idr": None,
                     "value_usd": 0.0,
                     "account": "DeBank Wallet",
-                    "details": f"Price: {token.get('price', '')}",
+                    "details": "",
                 }
             
-            token_aggregation[symbol]["amount"] += amount
+            token_aggregation[symbol]["quantity"] += amount
             token_aggregation[symbol]["value_usd"] += usd_value
 
     for aggregated_token in token_aggregation.values():
@@ -210,11 +224,12 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
                     token_details = ", ".join(token_list)
 
                     standardized.append({
-                        "source": "DeBank",
+                        "source": "EVM Wallet",
                         "category": category,
                         "asset": asset_name,
                         "currency": "USD",
-                        "amount": 1.0,
+                        "quantity": 1.0,
+                        "price": usd_value,
                         "value_idr": None,
                         "value_usd": usd_value,
                         "account": "DeBank Protocol",
@@ -224,11 +239,12 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
             usd_value = parse_usd(protocol.get("value") or "0")
             if usd_value > 0:
                 standardized.append({
-                    "source": "DeBank",
+                    "source": "EVM Wallet",
                     "category": "DeFi Protocol",
                     "asset": protocol_name,
                     "currency": "USD",
-                    "amount": 1.0,
+                    "quantity": 1.0,
+                    "price": usd_value,
                     "value_idr": None,
                     "value_usd": usd_value,
                     "account": "DeBank Protocol",
@@ -248,15 +264,16 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
         
         if value_usd > 0 or avg_price > 0:
             standardized.append({
-                "source": "DeBank",
+                "source": "EVM Wallet",
                 "category": "NFT",
                 "asset": nft.get("collection", "Unknown"),
                 "currency": "USD",
-                "amount": amount,
+                "quantity": amount,
+                "price": avg_price,
                 "value_idr": None,
                 "value_usd": value_usd if value_usd > 0 else avg_price,
                 "account": "DeBank NFT",
-                "details": f"Collection: {nft.get('collection')}, Avg Price: {nft.get('avg_price')}",
+                "details": f"Collection: {nft.get('collection')}",
             })
 
     return standardized
@@ -268,7 +285,7 @@ def standardize_binance_data(binance_data: Dict[str, Any]) -> List[Dict[str, Any
     for asset in binance_data.get("assets", []):
         asset_symbol = asset.get("symbol", "Unknown")
         price_usd = asset.get("price_usd", 0)
-        amount = asset.get("amount", 0)
+        amount = asset.get("quantity") or asset.get("amount") or 0
         value_usd = asset.get("value_usd", 0)
 
         standardized.append({
@@ -276,11 +293,12 @@ def standardize_binance_data(binance_data: Dict[str, Any]) -> List[Dict[str, Any
             "category": get_standard_category("Cryptocurrency", asset_symbol),
             "asset": asset_symbol,
             "currency": "USD",
-            "amount": amount,
+            "quantity": amount,
+            "price": price_usd,
             "value_idr": None,
             "value_usd": value_usd,
             "account": "Binance Main Account",
-            "details": f"Price: ${price_usd:,.2f}, Amount: {amount:,.8f}",
+            "details": "",
         })
     return standardized
 
@@ -291,19 +309,63 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
     for asset in alchemy_data.get("assets", []):
         asset_symbol = asset.get("symbol", "Unknown")
         name = asset.get("name", "Unknown Token")
-        amount = asset.get("balance", 0)
+        amount = asset.get("quantity") or asset.get("balance") or 0
         value_usd = asset.get("value_usd", 0)
 
         standardized.append({
-            "source": "Alchemy",
+            "source": "SOL Wallet",
             "category": get_standard_category("Cryptocurrency", asset_symbol),
             "asset": asset_symbol,
             "currency": "USD",
-            "amount": amount,
+            "quantity": amount,
+            "price": asset.get("price_usd") or (value_usd / amount if amount else 0),
             "value_idr": None,
             "value_usd": value_usd,
             "account": "Alchemy Wallet",
-            "details": f"Token: {name}, Network: {asset.get('network', 'Unknown')}, Amount: {amount:,.8f}",
+            "details": f"Token: {name}, Network: {asset.get('network', 'Unknown')}",
+        })
+    return standardized
+
+
+def standardize_solana_data(solana_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert Solana curated data to standardized format."""
+    standardized = []
+    for asset in solana_data.get("assets", []):
+        asset_symbol = asset.get("symbol", "Unknown")
+        name = asset.get("name", "Unknown Token")
+        amount = asset.get("quantity") or asset.get("amount") or 0
+        value_usd = asset.get("value_usd", 0)
+
+        standardized.append({
+            "source": "Solana",
+            "category": get_standard_category("Cryptocurrency", asset_symbol),
+            "asset": asset_symbol,
+            "currency": "USD",
+            "quantity": amount,
+            "price": asset.get("price", 0),
+            "value_idr": None,
+            "value_usd": value_usd,
+            "account": "Solana Wallet",
+            "details": f"Token: {name}",
+        })
+    return standardized
+
+
+def standardize_hyperliquid_data(hl_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert Hyperliquid curated data to standardized format."""
+    standardized = []
+    for pos in hl_data.get("vault_positions", []):
+        standardized.append({
+            "source": "Hyperliquid",
+            "category": get_standard_category(pos.get("category", "Vault Position"), pos.get("asset", "")),
+            "asset": pos.get("asset", "Unknown"),
+            "currency": "USD",
+            "quantity": pos.get("amount") or pos.get("quantity") or 1.0,
+            "price": pos.get("price_usd") or (pos.get("value_usd", 0) / pos.get("amount", 1) if pos.get("amount") else 0),
+            "value_idr": None,
+            "value_usd": pos.get("value_usd", 0),
+            "account": pos.get("account", "Hyperliquid"),
+            "details": pos.get("details", ""),
         })
     return standardized
 
@@ -319,7 +381,8 @@ def standardize_manual_data(manual_data: List[Dict[str, Any]]) -> List[Dict[str,
             "category": get_standard_category(category, asset),
             "asset": asset,
             "currency": row.get("currency", ""),
-            "amount": row.get("amount"),
+            "quantity": row.get("quantity") or row.get("amount"),
+            "price": row.get("price"),
             "value_idr": row.get("value_idr"),
             "value_usd": row.get("value_usd"),
             "account": row.get("account", ""),
@@ -480,6 +543,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", help="Date in YYYY-MM-DD format")
+    parser.add_argument("--skip-manual", action="store_true", help="Skip loading manual balances")
     args = parser.parse_args()
 
     td = args.date or pendulum.now().format("YYYY-MM-DD")
@@ -490,6 +554,8 @@ def main():
     debank_raw_path = data_dir / f"{td}_raw_debank.json"
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
     alchemy_curated_path = data_dir / f"{td}_curated_alchemy.json"
+    solana_curated_path = data_dir / f"{td}_curated_solana.json"
+    hyperliquid_curated_path = data_dir / f"{td}_curated_hyperliquid.json"
     manual_csv_path = data_dir / "_manual_balances.csv"
     
     output_csv_path = data_dir / f"{td}_portfolio.csv"
@@ -542,7 +608,7 @@ def main():
                 reader = csv.DictReader(f)
                 manual_raw = []
                 for row in reader:
-                    for field in ["amount", "value_idr", "value_usd"]:
+                    for field in ["quantity", "amount", "price", "value_idr", "value_usd"]:
                         if row.get(field):
                             try: row[field] = float(row[field])
                             except: row[field] = 0.0
@@ -552,11 +618,40 @@ def main():
             manual_loaded = True
         except Exception as e: print(f"Error loading Manual: {e}")
 
+    solana_loaded = False
+    solana_standardized = []
+    if solana_curated_path.exists():
+        try:
+            with open(solana_curated_path, "r") as f:
+                solana_standardized = standardize_solana_data(json.load(f))
+            solana_loaded = True
+        except Exception as e: print(f"Error loading Solana: {e}")
+
+    hyperliquid_loaded = False
+    hyperliquid_standardized = []
+    if hyperliquid_curated_path.exists():
+        try:
+            with open(hyperliquid_curated_path, "r") as f:
+                hyperliquid_standardized = standardize_hyperliquid_data(json.load(f))
+            hyperliquid_loaded = True
+        except Exception as e: print(f"Error loading Hyperliquid: {e}")
+
+    # Condition: manual balances are only for "today" by default, unless it's a specific date run
+    # Actually, the user says they are always latest, so we should skip them if td != today
+    today_str = pendulum.now().format("YYYY-MM-DD")
+    if args.skip_manual:
+        if manual_loaded:
+            print(f"ℹ Skipping manual balances for backfill/historical date {td}")
+            manual_loaded = False
+            manual_standardized = []
+
     all_data = (
         ksei_standardized
         + debank_standardized
         + binance_standardized
         + alchemy_standardized
+        + solana_standardized
+        + hyperliquid_standardized
         + manual_standardized
     )
 
@@ -580,7 +675,7 @@ def main():
             item["value_usd"] = 0.0
 
     # Write CSV
-    fieldnames = ["source", "category", "asset_class", "asset", "currency", "amount", "value_idr", "value_usd", "account", "details"]
+    fieldnames = ["source", "category", "asset_class", "asset", "currency", "quantity", "price", "value_idr", "value_usd", "account", "details"]
     with open(output_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -592,9 +687,11 @@ def main():
     # Print Summary
     sources_info = []
     if ksei_loaded: sources_info.append(f"KSEI ({len(ksei_standardized)} items)")
-    if debank_loaded: sources_info.append(f"DeBank ({len(debank_standardized)} items)")
+    if debank_loaded: sources_info.append(f"EVM Wallet ({len(debank_standardized)} items)")
     if binance_loaded: sources_info.append(f"Binance ({len(binance_standardized)} items)")
-    if alchemy_loaded: sources_info.append(f"Alchemy ({len(alchemy_standardized)} items)")
+    if alchemy_loaded: sources_info.append(f"SOL Wallet ({len(alchemy_standardized)} items)")
+    if solana_loaded: sources_info.append(f"Solana ({len(solana_standardized)} items)")
+    if hyperliquid_loaded: sources_info.append(f"Hyperliquid ({len(hyperliquid_standardized)} items)")
     if manual_loaded: sources_info.append(f"Manual ({len(manual_standardized)} items)")
 
     print_rich_summary(td, all_data, exchange_rate, sources_info)

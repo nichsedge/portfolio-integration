@@ -27,7 +27,7 @@ def clean_alchemy_data(raw_data):
                     "token_address": token.get("tokenAddress", "SOL"),
                     "symbol": token.get("symbol", "UNKNOWN"),
                     "name": token.get("name", "Unknown Token"),
-                    "balance": balance,
+                    "quantity": balance,
                     "decimals": token.get("decimals"),
                     "value_usd": value_usd,
                 }

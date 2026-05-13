@@ -19,7 +19,7 @@ def clean_solana_data(raw_data):
                 "mint": token.get("mint"),
                 "symbol": token.get("symbol", "UNKNOWN"),
                 "name": token.get("name", "Unknown Token"),
-                "amount": token.get("amount"),
+                "quantity": token.get("amount"),
                 "price": token.get("price"),
                 "value_usd": token.get("value_usd"),
                 "program_id": token.get("program_id"),
@@ -30,8 +30,12 @@ def clean_solana_data(raw_data):
 
 
 if __name__ == "__main__":
-    # Main execution
-    td = pendulum.now().format("YYYY-MM-DD")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Date in YYYY-MM-DD format")
+    args = parser.parse_args()
+
+    td = args.date or pendulum.now().format("YYYY-MM-DD")
     data_dir = get_data_dir()
     raw_path = data_dir / f"{td}_raw_solana.json"
     curated_path = data_dir / f"{td}_curated_solana.json"
