@@ -142,7 +142,7 @@ def standardize_vault_position(
 
     return {
         "source": "Hyperliquid",
-        "category": "Vault Position",
+        "category": "Yield / LP",
         "asset": vault_name,
         "currency": "USD",
         "quantity": 1.0,  # Representing share units
@@ -175,7 +175,7 @@ def standardize_user_vault(
         standardized.append(
             {
                 "source": "Hyperliquid",
-                "category": "Vault Management",
+                "category": "Yield / LP",
                 "asset": vault_name,
                 "currency": "USD",
                 "quantity": 0.0,

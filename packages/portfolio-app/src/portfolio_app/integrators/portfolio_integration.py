@@ -22,45 +22,91 @@ sys.path.append(str(repo_root / "packages/transform-core/src"))
 
 from portfolio_app.transformers.ksei_transform import clean_json
 from portfolio_app.transformers.debank_transform import extract_relevant
-from transform_core import get_data_dir, parse_usd, get_exchange_rate
+from transform_core import get_data_dir, parse_usd, get_exchange_rate, FILTER_THRESHOLDS
 
 
 STABLE_COINS = {"USDT", "USDC", "DAI", "FDUSD", "TUSD", "BUSD", "PYUSD", "USDP"}
 GOLD_ASSETS = {"PAXG", "XAUT"}
 
+VALID_CATEGORIES = {
+    "Bank Account", "Digital Bank", "Stablecoin", "Money Market Fund",
+    "SBN", "Corporate Bond", "P2P Lending",
+    "US Stocks", "Indo Stocks", "Equity Fund",
+    "Spot", "Staked", "Yield / LP",
+    "Gold", "Silver"
+}
+
 
 def get_standard_category(category: str, asset: str) -> str:
-    """Return the correct category, separating stablecoins and gold from crypto/defi."""
-    if category in ["Cryptocurrency", "DeFi Protocol", "Vault Position"]:
-        if asset in STABLE_COINS:
-            return "Cash"
-        if asset in GOLD_ASSETS:
-            return "Gold"
+    """Return the standardized category based on asset type and original category."""
+    # Specific asset overrides take priority
+    if asset in STABLE_COINS:
+        return "Stablecoin"
+    if asset in GOLD_ASSETS:
+        return "Gold"
+    
+    # If already a valid standard category, keep it as is
+    if category in VALID_CATEGORIES:
+        return category
+    
+    # Transform legacy/raw categories
+    if category == "Cryptocurrency":
+        return "Spot"
+    
+    if "Staked" in category:
+        return "Staked"
+        
+    # DeFi keywords (avoiding collision with Fixed Income terms like 'Lending')
+    if any(term in category for term in ["Yield", "LP", "Protocol", "Vault", "Rewards"]):
+        return "Yield / LP"
+        
+    # Specific check for crypto lending vs P2P lending
+    if "Lending" in category and "P2P" not in category:
+        return "Yield / LP"
+
     return category
 
 
 def get_asset_class(category: str) -> str:
     """Group categories into broader asset classes for investment analysis."""
     mapping = {
-        "Cash": "Cash & Stables",
-        "Deposit": "Cash & Stables",
-        "Equity": "Equities",
-        "Mutual Fund": "Equities",
-        "Bond": "Fixed Income",
-        "P2P Syariah": "Fixed Income",
-        "Cryptocurrency": "Crypto",
-        "DeFi Protocol": "Crypto",
-        "DeFi Yield": "Crypto",
-        "DeFi Staked": "Crypto",
-        "DeFi Lending": "Crypto",
-        "DeFi Debt": "Crypto",
-        "DeFi Rewards": "Crypto",
-        "DeFi Deposit": "Crypto",
+        # Cash & Equivalents
+        "Bank Account": "Cash & Equivalents",
+        "Digital Bank": "Cash & Equivalents",
+        "Stablecoin": "Cash & Equivalents",
+        "Money Market Fund": "Cash & Equivalents",
+        
+        # Fixed Income
+        "SBN": "Fixed Income",
+        "Corporate Bond": "Fixed Income",
+        "P2P Lending": "Fixed Income",
+        
+        # Equities
+        "US Stocks": "Equities",
+        "Indo Stocks": "Equities",
+        "Equity Fund": "Equities",
+        
+        # Crypto
+        "Spot": "Crypto",
+        "Staked": "Crypto",
+        "Yield / LP": "Crypto",
+        
+        # Commodities
         "Gold": "Commodities",
-        "NFT": "Collectibles",
-        "Vault Position": "Crypto",
-        "Vault Management": "Crypto",
+        "Silver": "Commodities",
     }
+    
+    # Handle legacy categories or variations
+    if category not in mapping:
+        if category in ["Cash", "Deposit"]: return "Cash & Equivalents"
+        if category in ["Equity", "Indo Stocks"]: return "Equities"
+        if category in ["Mutual Fund", "Equity Fund"]: return "Equities"
+        if category in ["Bond", "SBN"]: return "Fixed Income"
+        if category in ["P2P Syariah", "P2P Lending"]: return "Fixed Income"
+        if category in ["Cryptocurrency", "Spot"]: return "Crypto"
+        if category in ["DeFi Protocol", "DeFi Yield", "Yield / LP"]: return "Crypto"
+        if category in ["DeFi Staked", "Staked"]: return "Crypto"
+        
     return mapping.get(category, "Other")
 
 
@@ -86,9 +132,17 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             elif bank_code == "JAGO1":
                 asset_name = "Stockbit RDN"
 
+            # Filter dust
+            if currency == "IDR":
+                if value_idr < FILTER_THRESHOLDS["IDR"]:
+                    continue
+            elif currency == "USD":
+                if value_usd < FILTER_THRESHOLDS["USD"]:
+                    continue
+
             standardized.append({
                 "source": "KSEI",
-                "category": "Cash",
+                "category": "Bank Account",
                 "asset": asset_name,
                 "currency": currency,
                 "quantity": entry.get("saldo", 0),
@@ -102,14 +156,19 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Process equity
     if "equity" in ksei_data:
         for entry in ksei_data["equity"].get("data", []):
+            # Filter dust
+            value_idr = entry.get("nilaiInvestasi", 0)
+            if value_idr < FILTER_THRESHOLDS["IDR"]:
+                continue
+
             standardized.append({
                 "source": "KSEI",
-                "category": "Equity",
+                "category": "Indo Stocks",
                 "asset": entry.get("efek", "Unknown").split(" - ")[0],
                 "currency": "IDR",
                 "quantity": entry.get("jumlah", 0),
                 "price": entry.get("harga", 0),
-                "value_idr": entry.get("nilaiInvestasi", 0),
+                "value_idr": value_idr,
                 "value_usd": None,
                 "account": entry.get("rekening", ""),
                 "details": f"Stock: {entry.get('efek', '')}, Broker: {entry.get('partisipan', '')}",
@@ -119,18 +178,30 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     if "mutual_fund" in ksei_data:
         for entry in ksei_data["mutual_fund"].get("data", []):
             asset_name = entry.get("efek", "Unknown")
-            category = "Mutual Fund"
-            if "Bond" in asset_name or "Fixed Income" in asset_name:
-                category = "Bond"
+            category = "Equity Fund"
+            if any(term in asset_name for term in ["Bond", "Fixed Income", "SBN", "Obligasi"]):
+                # Check if it's explicitly a government-related fund
+                if any(term in asset_name for term in ["SBN", "Sovereign", "Government", "SST", "INDON", "INDOGB"]):
+                    category = "SBN"
+                else:
+                    # Default for general bond funds
+                    category = "Corporate Bond"
+            elif any(term in asset_name for term in ["Pasar Uang", "Money Market", "Liquidity"]):
+                category = "Money Market Fund"
             
+            # Filter dust
+            value_idr = entry.get("nilaiInvestasi", 0)
+            if value_idr < FILTER_THRESHOLDS["IDR"]:
+                continue
+
             standardized.append({
                 "source": "KSEI",
                 "category": category,
                 "asset": asset_name,
                 "currency": "IDR",
                 "quantity": entry.get("jumlah", 0),
-                "price": entry.get("nilaiInvestasi", 0) / entry.get("jumlah") if entry.get("jumlah") else 0,
-                "value_idr": entry.get("nilaiInvestasi", 0),
+                "price": value_idr / entry.get("jumlah") if entry.get("jumlah") else 0,
+                "value_idr": value_idr,
                 "value_usd": None,
                 "account": entry.get("rekening", ""),
                 "details": f"Fund: {entry.get('efek', '')}, Manager: {entry.get('partisipan', '')}",
@@ -139,14 +210,25 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Process bonds
     if "bond" in ksei_data:
         for entry in ksei_data["bond"].get("data", []):
+            # Filter dust
+            value_idr = entry.get("nilaiInvestasi", 0)
+            if value_idr < FILTER_THRESHOLDS["IDR"]:
+                continue
+
+            asset_name = entry.get("efek", "Unknown")
+            category = "SBN"
+            # If it doesn't look like a government bond, categorize as Corporate
+            if not any(term in asset_name for term in ["ORI", "SR", "ST", "FR", "SBN", "PBS", "INDON", "INDOGB"]):
+                category = "Corporate Bond"
+
             standardized.append({
                 "source": "KSEI",
-                "category": "Bond",
-                "asset": entry.get("efek", "Unknown"),
+                "category": category,
+                "asset": asset_name,
                 "currency": "IDR",
                 "quantity": entry.get("jumlah", 0),
-                "price": entry.get("nilaiInvestasi", 0) / entry.get("jumlah") if entry.get("jumlah") else 0,
-                "value_idr": entry.get("nilaiInvestasi", 0),
+                "price": value_idr / entry.get("jumlah") if entry.get("jumlah") else 0,
+                "value_idr": value_idr,
                 "value_usd": None,
                 "account": entry.get("rekening", ""),
                 "details": f"Bond: {entry.get('efek', '')}, Issuer: {entry.get('partisipan', '')}",
@@ -163,7 +245,7 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
     token_aggregation = {}
     for token in debank_data.get("tokens", []):
         usd_value = parse_usd(token.get("value") or "0")
-        if usd_value > 0:
+        if usd_value >= FILTER_THRESHOLDS["USD"]:
             symbol = token.get("symbol", "Unknown")
             amount_str = token.get("quantity") or token.get("amount") or "0"
             if isinstance(amount_str, str):
@@ -202,17 +284,14 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
         if positions:
             for pos in positions:
                 usd_value = parse_usd(pos.get("value") or "0")
-                if usd_value > 0:
+                if usd_value >= FILTER_THRESHOLDS["USD"]:
                     pool = pos.get("pool", "Unknown Pool")
                     pos_type = pos.get("type", "Protocol")
                     
-                    category = "DeFi Protocol"
-                    if pos_type == "Yield": category = "DeFi Yield"
-                    elif pos_type == "Staked": category = "DeFi Staked"
-                    elif pos_type == "Lending": category = "DeFi Lending"
-                    elif pos_type == "Borrow": category = "DeFi Debt"
-                    elif pos_type == "Rewards": category = "DeFi Rewards"
-                    elif pos_type == "Deposit": category = "DeFi Deposit"
+                    if pos_type == "Staked":
+                        category = "Staked"
+                    else:
+                        category = "Yield / LP"
 
                     asset_name = f"{protocol_name} - {pool}"
                     if pos_type and pos_type not in ["Other", "Protocol"]:
@@ -237,10 +316,10 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
                     })
         else:
             usd_value = parse_usd(protocol.get("value") or "0")
-            if usd_value > 0:
+            if usd_value >= FILTER_THRESHOLDS["USD"]:
                 standardized.append({
                     "source": "EVM Wallet",
-                    "category": "DeFi Protocol",
+                    "category": "Yield / LP",
                     "asset": protocol_name,
                     "currency": "USD",
                     "quantity": 1.0,
@@ -262,10 +341,10 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
             
         value_usd = avg_price * amount if avg_price > 0 else 0
         
-        if value_usd > 0 or avg_price > 0:
+        if value_usd >= FILTER_THRESHOLDS["USD"]:
             standardized.append({
                 "source": "EVM Wallet",
-                "category": "NFT",
+                "category": "Spot",
                 "asset": nft.get("collection", "Unknown"),
                 "currency": "USD",
                 "quantity": amount,
@@ -287,6 +366,10 @@ def standardize_binance_data(binance_data: Dict[str, Any]) -> List[Dict[str, Any
         price_usd = asset.get("price_usd", 0)
         amount = asset.get("quantity") or asset.get("amount") or 0
         value_usd = asset.get("value_usd", 0)
+
+        # Filter dust
+        if value_usd < FILTER_THRESHOLDS["USD"]:
+            continue
 
         standardized.append({
             "source": "Binance",
@@ -312,6 +395,10 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
         amount = asset.get("quantity") or asset.get("balance") or 0
         value_usd = asset.get("value_usd", 0)
 
+        # Filter dust
+        if value_usd < FILTER_THRESHOLDS["USD"]:
+            continue
+
         standardized.append({
             "source": "SOL Wallet",
             "category": get_standard_category("Cryptocurrency", asset_symbol),
@@ -336,6 +423,10 @@ def standardize_solana_data(solana_data: Dict[str, Any]) -> List[Dict[str, Any]]
         amount = asset.get("quantity") or asset.get("amount") or 0
         value_usd = asset.get("value_usd", 0)
 
+        # Filter dust
+        if value_usd < FILTER_THRESHOLDS["USD"]:
+            continue
+
         standardized.append({
             "source": "Solana",
             "category": get_standard_category("Cryptocurrency", asset_symbol),
@@ -355,15 +446,21 @@ def standardize_hyperliquid_data(hl_data: Dict[str, Any]) -> List[Dict[str, Any]
     """Convert Hyperliquid curated data to standardized format."""
     standardized = []
     for pos in hl_data.get("vault_positions", []):
+        value_usd = pos.get("value_usd", 0)
+        
+        # Filter dust
+        if value_usd < FILTER_THRESHOLDS["USD"]:
+            continue
+
         standardized.append({
             "source": "Hyperliquid",
             "category": get_standard_category(pos.get("category", "Vault Position"), pos.get("asset", "")),
             "asset": pos.get("asset", "Unknown"),
             "currency": "USD",
             "quantity": pos.get("amount") or pos.get("quantity") or 1.0,
-            "price": pos.get("price_usd") or (pos.get("value_usd", 0) / pos.get("amount", 1) if pos.get("amount") else 0),
+            "price": pos.get("price_usd") or (value_usd / pos.get("amount", 1) if pos.get("amount") else 0),
             "value_idr": None,
-            "value_usd": pos.get("value_usd", 0),
+            "value_usd": value_usd,
             "account": pos.get("account", "Hyperliquid"),
             "details": pos.get("details", ""),
         })
@@ -410,7 +507,7 @@ def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rat
             
         # Add to totals
         cat = item["category"]
-        if "Debt" in cat or "Borrow" in cat or "Liabilities" in cat:
+        if any(term in cat for term in ["Debt", "Borrow", "Liabilities"]):
             total_liabilities_idr += val_idr
         else:
             total_assets_idr += val_idr
@@ -486,7 +583,7 @@ def print_rich_summary(td: str, all_data: List[Dict[str, Any]], exchange_rate: f
             val_idr = (item.get("value_usd") or 0.0) * exchange_rate
         
         cat = item["category"]
-        if "Debt" in cat or "Borrow" in cat:
+        if any(term in cat for term in ["Debt", "Borrow", "Liabilities"]):
             total_liabilities_idr += val_idr
         else:
             total_assets_idr += val_idr
