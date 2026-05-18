@@ -136,7 +136,7 @@ def main():
         processes["KSEI"] = _start_non_blocking_step("KSEI", str(ksei_path), ["uv", "run", "examples/fetch_and_dump_portfolios.py"])
         
         debank_path = repo_root / "packages/debank-scraper"
-        processes["DeBank"] = _start_non_blocking_step("DeBank", str(debank_path), ["npm", "run", "scrape"])
+        processes["DeBank"] = _start_non_blocking_step("DeBank", str(debank_path), ["uv", "run", "debank-scrape"])
         
         binance_path = repo_root / "packages/binance-client"
         processes["Binance"] = _start_non_blocking_step("Binance", str(binance_path), ["uv", "run", "binance-fetch"])
