@@ -4,6 +4,7 @@ import pendulum
 from typing import List, Dict, Any
 import os
 from pathlib import Path
+import re
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -108,6 +109,30 @@ def get_asset_class(category: str) -> str:
         if category in ["DeFi Staked", "Staked"]: return "Crypto"
         
     return mapping.get(category, "Other")
+
+
+def _slugify(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
+    return cleaned.strip("-")
+
+
+def enrich_account_identity(items: List[Dict[str, Any]]) -> None:
+    """Attach account_name and account_key for downstream account linking."""
+    for item in items:
+        source = str(item.get("source") or "").strip() or "unknown"
+        legacy_account = str(item.get("account") or "").strip()
+        account_name = legacy_account or source
+
+        source_key = _slugify(source) or "unknown"
+        account_key_raw = legacy_account if legacy_account else account_name
+        account_key = f"{source_key}:{_slugify(account_key_raw) or 'default'}"
+
+        item["account_name"] = account_name
+        item["account_key"] = account_key
+
+        # Keep backward compatibility with older consumers.
+        if not legacy_account:
+            item["account"] = account_name
 
 
 def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -758,6 +783,9 @@ def main():
     for item in all_data:
         item["asset_class"] = get_asset_class(item.get("category", "Other"))
 
+    # Add stable account identity fields for consumers that can link holdings to accounts.
+    enrich_account_identity(all_data)
+
     # Fill in missing currency values using exchange rate
     for item in all_data:
         v_idr = item.get("value_idr")
@@ -772,7 +800,21 @@ def main():
             item["value_usd"] = 0.0
 
     # Write CSV
-    fieldnames = ["source", "category", "asset_class", "asset", "currency", "quantity", "price", "value_idr", "value_usd", "account", "details"]
+    fieldnames = [
+        "source",
+        "category",
+        "asset_class",
+        "asset",
+        "currency",
+        "quantity",
+        "price",
+        "value_idr",
+        "value_usd",
+        "account_key",
+        "account_name",
+        "account",
+        "details",
+    ]
     with open(output_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
