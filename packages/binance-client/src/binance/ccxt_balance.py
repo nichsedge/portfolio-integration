@@ -2,6 +2,8 @@ import ccxt
 import json
 import os
 import socket
+import urllib.request
+import urllib.parse
 import pendulum
 from dotenv import load_dotenv
 from pathlib import Path
@@ -11,6 +13,39 @@ load_dotenv()
 
 # Set socket timeout for all connections (30 seconds)
 socket.setdefaulttimeout(30)
+
+
+def patch_dns_with_doh():
+    """
+    Monkey-patch socket.getaddrinfo to resolve blocked domains (like api.binance.com)
+    using Cloudflare's DNS-over-HTTPS (DoH) API. This bypasses ISP DNS hijacking
+    without requiring system-wide configuration or a VPN.
+    """
+    original_getaddrinfo = socket.getaddrinfo
+
+    def doh_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        if host in ("api.binance.com", "binance.com"):
+            try:
+                url = f"https://cloudflare-dns.com/dns-query?name={urllib.parse.quote(host)}&type=A"
+                req = urllib.request.Request(url, headers={"Accept": "application/dns-json"})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    data = json.loads(response.read().decode())
+                    ips = [ans["data"] for ans in data.get("Answer", []) if ans["type"] == 1]
+                    if ips:
+                        results = []
+                        for ip in ips:
+                            results.append((socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port)))
+                        return results
+            except Exception:
+                # Fallback to standard DNS if DoH query fails
+                pass
+        return original_getaddrinfo(host, port, family, type, proto, flags)
+
+    socket.getaddrinfo = doh_getaddrinfo
+
+
+# Apply the patch immediately upon import
+patch_dns_with_doh()
 
 
 def get_data_dir():
