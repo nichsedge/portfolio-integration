@@ -2,7 +2,20 @@ import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
 
-import 'dotenv/config';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import { existsSync } from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootEnvPath = path.resolve(__dirname, '../../.env');
+
+if (existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+} else {
+  dotenv.config();
+}
+
 const EVM_ADDRESS = process.env.EVM_ADDRESS || "your_default_address_here";
 
 const PROFILE_URL = `https://debank.com/profile/${EVM_ADDRESS}`;

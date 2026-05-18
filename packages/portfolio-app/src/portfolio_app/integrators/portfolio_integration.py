@@ -439,57 +439,6 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
     return standardized
 
 
-def standardize_solana_data(solana_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Convert Solana curated data to standardized format."""
-    standardized = []
-    for asset in solana_data.get("assets", []):
-        asset_symbol = asset.get("symbol", "Unknown")
-        name = asset.get("name", "Unknown Token")
-        amount = asset.get("quantity") or asset.get("amount") or 0
-        value_usd = asset.get("value_usd", 0)
-
-        # Filter dust
-        if value_usd < FILTER_THRESHOLDS["USD"]:
-            continue
-
-        standardized.append({
-            "source": "Solana",
-            "category": get_standard_category("Cryptocurrency", asset_symbol),
-            "asset": asset_symbol,
-            "currency": "USD",
-            "quantity": amount,
-            "price": asset.get("price", 0),
-            "value_idr": None,
-            "value_usd": value_usd,
-            "account": "Solana Wallet",
-            "details": f"Token: {name}",
-        })
-    return standardized
-
-
-def standardize_hyperliquid_data(hl_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Convert Hyperliquid curated data to standardized format."""
-    standardized = []
-    for pos in hl_data.get("vault_positions", []):
-        value_usd = pos.get("value_usd", 0)
-        
-        # Filter dust
-        if value_usd < FILTER_THRESHOLDS["USD"]:
-            continue
-
-        standardized.append({
-            "source": "Hyperliquid",
-            "category": get_standard_category(pos.get("category", "Vault Position"), pos.get("asset", "")),
-            "asset": pos.get("asset", "Unknown"),
-            "currency": "USD",
-            "quantity": pos.get("amount") or pos.get("quantity") or 1.0,
-            "price": pos.get("price_usd") or (value_usd / pos.get("amount", 1) if pos.get("amount") else 0),
-            "value_idr": None,
-            "value_usd": value_usd,
-            "account": pos.get("account", "Hyperliquid"),
-            "details": pos.get("details", ""),
-        })
-    return standardized
 
 
 def standardize_manual_data(manual_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -676,8 +625,6 @@ def main():
     debank_raw_path = data_dir / f"{td}_raw_debank.json"
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
     alchemy_curated_path = data_dir / f"{td}_curated_alchemy.json"
-    solana_curated_path = data_dir / f"{td}_curated_solana.json"
-    hyperliquid_curated_path = data_dir / f"{td}_curated_hyperliquid.json"
     manual_csv_path = data_dir / "_manual_balances.csv"
     
     output_csv_path = data_dir / f"{td}_portfolio.csv"
@@ -740,23 +687,7 @@ def main():
             manual_loaded = True
         except Exception as e: print(f"Error loading Manual: {e}")
 
-    solana_loaded = False
-    solana_standardized = []
-    if solana_curated_path.exists():
-        try:
-            with open(solana_curated_path, "r") as f:
-                solana_standardized = standardize_solana_data(json.load(f))
-            solana_loaded = True
-        except Exception as e: print(f"Error loading Solana: {e}")
 
-    hyperliquid_loaded = False
-    hyperliquid_standardized = []
-    if hyperliquid_curated_path.exists():
-        try:
-            with open(hyperliquid_curated_path, "r") as f:
-                hyperliquid_standardized = standardize_hyperliquid_data(json.load(f))
-            hyperliquid_loaded = True
-        except Exception as e: print(f"Error loading Hyperliquid: {e}")
 
     # Condition: manual balances are only for "today" by default, unless it's a specific date run
     # Actually, the user says they are always latest, so we should skip them if td != today
@@ -772,8 +703,6 @@ def main():
         + debank_standardized
         + binance_standardized
         + alchemy_standardized
-        + solana_standardized
-        + hyperliquid_standardized
         + manual_standardized
     )
 
@@ -829,8 +758,6 @@ def main():
     if debank_loaded: sources_info.append(f"EVM Wallet ({len(debank_standardized)} items)")
     if binance_loaded: sources_info.append(f"Binance ({len(binance_standardized)} items)")
     if alchemy_loaded: sources_info.append(f"SOL Wallet ({len(alchemy_standardized)} items)")
-    if solana_loaded: sources_info.append(f"Solana ({len(solana_standardized)} items)")
-    if hyperliquid_loaded: sources_info.append(f"Hyperliquid ({len(hyperliquid_standardized)} items)")
     if manual_loaded: sources_info.append(f"Manual ({len(manual_standardized)} items)")
 
     print_rich_summary(td, all_data, exchange_rate, sources_info)

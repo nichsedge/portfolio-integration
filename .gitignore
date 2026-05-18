@@ -1,4 +1,5 @@
-data
+data/*
+!data/manual_balances_template.csv
 
 # Python
 __pycache__/

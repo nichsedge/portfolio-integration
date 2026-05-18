@@ -2,7 +2,19 @@ import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
 
-import 'dotenv/config';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import { existsSync } from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootEnvPath = path.resolve(__dirname, '../../.env');
+
+if (existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+} else {
+  dotenv.config();
+}
 
 const QAZWA_EMAIL = process.env.QAZWA_EMAIL;
 const QAZWA_PASSWORD = process.env.QAZWA_PASSWORD;

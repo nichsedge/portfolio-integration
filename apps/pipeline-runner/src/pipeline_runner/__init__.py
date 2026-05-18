@@ -18,6 +18,10 @@ import sys
 import pendulum
 from pathlib import Path
 from typing import Dict, Any
+from dotenv import load_dotenv
+
+# Load environment variables from root .env file
+load_dotenv()
 
 # Add packages to path for imports
 repo_root = Path(__file__).resolve().parents[4]
@@ -141,10 +145,6 @@ def main():
         if alchemy_path.exists():
             processes["Alchemy"] = _start_non_blocking_step("Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"])
 
-        # Hyperliquid is both fetcher and transformer for now
-        hl_path = repo_root / "packages/portfolio-app/src/portfolio_app/transformers/hyperliquid_transform.py"
-        if hl_path.exists():
-            processes["Hyperliquid"] = _start_non_blocking_step("Hyperliquid", str(hl_path.parent), [sys.executable, str(hl_path)])
 
         if not _wait_for_steps(processes):
             print("\nPipeline failed during data fetching. Aborting.")

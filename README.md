@@ -9,7 +9,6 @@ This system extracts and integrates portfolio data from various financial platfo
 - **KSEI** - Indonesian Central Securities Depository
 - **DeBank** - DeFi portfolio tracking platform
 - **Binance** - Cryptocurrency exchange
-- **Hyperliquid** - DeFi protocol
 - **Manual CSV** - For bank accounts, cash, and other non-API assets
 
 ## Quick Start

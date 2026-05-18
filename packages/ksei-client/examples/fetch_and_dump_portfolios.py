@@ -4,6 +4,9 @@ import asyncio
 import time
 from pathlib import Path
 import pendulum
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from ksei.client import KSEIClient
 from ksei.utils import FileAuthStore

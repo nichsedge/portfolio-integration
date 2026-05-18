@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Python monorepo managed with `uv` that implements a 3-stage ETL pipeline for aggregating financial portfolio data from multiple platforms:
 
-1. **Extract:** Fetch raw data from sources (KSEI, DeBank, Binance, Alchemy, Solana, QAZWA, Hyperliquid) and read manual entries from `_manual_balances.csv`
+1. **Extract:** Fetch raw data from sources (KSEI, DeBank, Binance, Alchemy) and read manual entries from `_manual_balances.csv`
 2. **Transform:** Clean and filter each source into a curated format
 3. **Load:** Integrate all sources into a unified portfolio CSV
 4. **Visualize:** Generate portfolio insights and plots (Step 4 of pipeline)
@@ -19,8 +19,6 @@ packages/          # Independent uv packages
 ├── debank-scraper/# DeFi portfolio (Node.js/Playwright)
 ├── binance-client/# Crypto exchange via CCXT (Python)
 ├── alchemy-client/# Solana token holdings (Python)
-├── solana-client/ # Solana blockchain RPC (Python)
-├── qazwa-scraper/ # Portfolio scraper (Node.js/Playwright)
 ├── transform-core/# Shared utilities (data dir resolution, parsing)
 └── portfolio-app/ # Transformers + integrators
 
@@ -103,7 +101,6 @@ Follow the standardized fetcher package pattern:
 - `KSEI_USERNAME` / `KSEI_PASSWORD` - KSEI credentials
 - `EVM_ADDRESS` - DeBank wallet address
 - `BINANCE_API_KEY` / `BINANCE_API_SECRET` - Binance API
-- `SOLANA_WALLET_ADDRESS` / `RPC_URL` - Solana configuration
 - `WALLET_ADDRESS` / `ALCHEMY_API_KEY` - Alchemy configuration
 
 ## Key Implementation Details
@@ -111,4 +108,4 @@ Follow the standardized fetcher package pattern:
 - **Data directory resolution**: All packages use `transform_core.utils.get_data_dir()` which checks `PORTFOLIO_DATA_DIR` → `DATA_DIR` → default `REPO_ROOT/data`
 - **Date handling**: All files use `datetime.now().strftime("%Y-%m-%d")` for consistent naming
 - **Pipelines**: The pipeline-runner executes fetchers as subprocesses for isolation; transforms run via direct Python execution
-- **Node.js scrapers**: DeBank and QAZWA scrapers use Playwright and `npm run scrape` commands
+- **Node.js scrapers**: DeBank scraper uses Playwright and `npm run scrape` commands
