@@ -193,7 +193,20 @@ def main():
                 integrate_cmd.append("--skip-manual")
                 
             # Set verbose=True for integration to show the rich summary
-            _run_blocking_step("Integration", str(integrator_path.parent), integrate_cmd, verbose=True)
+            if _run_blocking_step("Integration", str(integrator_path.parent), integrate_cmd, verbose=True):
+                # Upload to GCS if configured
+                try:
+                    sys.path.insert(0, str(portfolio_app_path / "src"))
+                    from portfolio_app.gcs_uploader import upload_to_gcs
+                    
+                    output_csv_path = data_dir / f"{current_date}_portfolio.csv"
+                    output_json_path = data_dir / f"{current_date}_snapshot.json"
+                    
+                    print(f"\n--- Step 3.5: GCS Upload ({current_date}) ---")
+                    upload_to_gcs(output_json_path)
+                    upload_to_gcs(output_csv_path)
+                except Exception as e:
+                    print(f"⚠️ GCS upload failed: {e}")
 
         print("\n--- Step 4: Generate Insights ---")
         insights_path = portfolio_app_path / "src/portfolio_app/generate_insights.py"

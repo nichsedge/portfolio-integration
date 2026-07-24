@@ -24,6 +24,7 @@ dependencies = [
     "matplotlib>=3.10.8",
     "portfolio-transform-core",
     "rich>=15.0.0",
+    "google-cloud-storage>=2.14.0",
 ]
 
 [build-system]

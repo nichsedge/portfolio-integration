@@ -288,7 +288,7 @@ def standardize_debank_data(debank_data: Dict[str, Any]) -> List[Dict[str, Any]]
                     "asset": symbol,
                     "currency": "USD",
                     "quantity": 0.0,
-                    "price": token.get("price", 0),
+                    "price": parse_usd(token.get("price")) if token.get("price") is not None else 0.0,
                     "value_idr": None,
                     "value_usd": 0.0,
                     "account": "DeBank Wallet",
