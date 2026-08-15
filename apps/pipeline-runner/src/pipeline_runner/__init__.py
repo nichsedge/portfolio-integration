@@ -132,8 +132,9 @@ def main():
         print("--- Step 1: Fetch Raw Data ---")
         processes = {}
         
-        ksei_path = repo_root / "packages/ksei-client"
-        processes["KSEI"] = _start_non_blocking_step("KSEI", str(ksei_path), ["uv", "run", "examples/fetch_and_dump_portfolios.py"])
+        processes["KSEI"] = _start_non_blocking_step(
+            "KSEI", str(repo_root), ["uv", "run", "ksei", "dump", "--output", str(data_dir)]
+        )
         
         debank_path = repo_root / "packages/debank-scraper"
         processes["DeBank"] = _start_non_blocking_step("DeBank", str(debank_path), ["uv", "run", "debank-scrape"])

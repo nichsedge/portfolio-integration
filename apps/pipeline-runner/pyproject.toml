@@ -8,6 +8,7 @@ license = { text = "MIT" }
 authors = [{ name = "Your Name", email = "your.email@example.com" }]
 dependencies = [
     "portfolio-app",
+    "ksei",
     "python-dotenv>=1.0.0",
 ]
 
@@ -16,6 +17,7 @@ packages = ["src/pipeline_runner"]
 
 [tool.uv.sources]
 portfolio-app = { workspace = true }
+ksei = { git = "https://github.com/nichsedge/ksei.git" }
 
 [project.scripts]
 run-all = "pipeline_runner:main"
