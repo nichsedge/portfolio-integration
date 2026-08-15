@@ -28,28 +28,32 @@ apps/
 
 When working across packages, use `sys.path.insert(0, str(repo_root / "packages"))` to enable imports (see pipeline_runner/__init__.py:22). REPO_ROOT is computed as `Path(__file__).resolve().parents[4]` from the pipeline_runner.
 
+## ⚠️ Testing Rule for AI Agents (CRITICAL)
+
+When updating, debugging, or modifying a specific component:
+* **DO NOT run `uv run run-all`** (it triggers GCS uploads and calls all external APIs unnecessarily).
+* **ONLY test the individual component you touched:**
+  * **DeBank**: `uv run debank-scrape`
+  * **KSEI**: `uv run ksei dump`
+  * **Binance**: `uv run binance-fetch`
+  * **Alchemy**: `uv run alchemy-fetch`
+
 ## Common Commands
 
 ```bash
 # Install/update dependencies
 uv sync
-cd packages/debank-scraper && npm install && cd ../..
 
-# Run full pipeline (fetch + transform + integrate)
-uv run run-all
+# Individual fetchers (PREFERRED for development & testing)
+uv run debank-scrape
+uv run ksei dump
+uv run binance-fetch
+uv run alchemy-fetch
 
-# Pipeline options
-uv run fetch-only   # Only fetch raw data
-uv run integrate-only    # Skip fetching, just transform/integrate
-
-# Individual fetchers
-cd packages/ksei-client && uv run examples/fetch_and_dump_portfolios.py
-cd packages/debank-scraper && npm run scrape
-cd packages/binance-client && uv run binance-fetch
-uv run alchemy-fetch  # From repo root
-
-# Data directory handling
-export PORTFOLIO_DATA_DIR=/path/to/data  # Override default data directory
+# Full pipeline options (ONLY when explicitly requested)
+uv run run-all         # Full pipeline: fetch + transform + integrate + GCS upload
+uv run fetch-only      # Only fetch raw data for all sources
+uv run integrate-only  # Skip fetching, just transform/integrate
 ```
 
 ## Data Pipeline File Conventions
