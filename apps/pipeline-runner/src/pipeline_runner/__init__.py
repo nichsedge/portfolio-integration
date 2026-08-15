@@ -136,8 +136,9 @@ def main():
             "KSEI", str(repo_root), ["uv", "run", "ksei", "dump", "--output", str(data_dir)]
         )
         
-        debank_path = repo_root / "packages/debank-scraper"
-        processes["DeBank"] = _start_non_blocking_step("DeBank", str(debank_path), ["uv", "run", "debank-scrape"])
+        processes["DeBank"] = _start_non_blocking_step(
+            "DeBank", str(repo_root), ["uv", "run", "debank-scrape", "--output", str(data_dir)]
+        )
         
         binance_path = repo_root / "packages/binance-client"
         processes["Binance"] = _start_non_blocking_step("Binance", str(binance_path), ["uv", "run", "binance-fetch"])

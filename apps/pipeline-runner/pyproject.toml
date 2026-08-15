@@ -9,6 +9,7 @@ authors = [{ name = "Your Name", email = "your.email@example.com" }]
 dependencies = [
     "portfolio-app",
     "ksei",
+    "debank-scraper",
     "python-dotenv>=1.0.0",
 ]
 
@@ -18,6 +19,7 @@ packages = ["src/pipeline_runner"]
 [tool.uv.sources]
 portfolio-app = { workspace = true }
 ksei = { git = "https://github.com/nichsedge/ksei.git" }
+debank-scraper = { git = "https://github.com/nichsedge/debank-scraper.git" }
 
 [project.scripts]
 run-all = "pipeline_runner:main"
