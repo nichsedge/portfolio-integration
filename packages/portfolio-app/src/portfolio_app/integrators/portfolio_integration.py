@@ -23,6 +23,7 @@ sys.path.append(str(repo_root / "packages/transform-core/src"))
 
 from portfolio_app.transformers.ksei_transform import clean_json
 from portfolio_app.transformers.debank_transform import extract_relevant
+from portfolio_app.ai_state_generator import build_and_save_ai_state
 from transform_core import get_data_dir, parse_usd, get_exchange_rate, FILTER_THRESHOLDS
 
 
@@ -109,30 +110,6 @@ def get_asset_class(category: str) -> str:
         if category in ["DeFi Staked", "Staked"]: return "Crypto"
         
     return mapping.get(category, "Other")
-
-
-def _slugify(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
-    return cleaned.strip("-")
-
-
-def enrich_account_identity(items: List[Dict[str, Any]]) -> None:
-    """Attach account_name and account_key for downstream account linking."""
-    for item in items:
-        source = str(item.get("source") or "").strip() or "unknown"
-        legacy_account = str(item.get("account") or "").strip()
-        account_name = legacy_account or source
-
-        source_key = _slugify(source) or "unknown"
-        account_key_raw = legacy_account if legacy_account else account_name
-        account_key = f"{source_key}:{_slugify(account_key_raw) or 'default'}"
-
-        item["account_name"] = account_name
-        item["account_key"] = account_key
-
-        # Keep backward compatibility with older consumers.
-        if not legacy_account:
-            item["account"] = account_name
 
 
 def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -441,25 +418,7 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
 
 
 
-def standardize_manual_data(manual_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Convert Manual data to standardized format."""
-    standardized = []
-    for row in manual_data:
-        category = row.get("category", "Unknown")
-        asset = row.get("asset", "Unknown")
-        standardized.append({
-            "source": row.get("source", "Manual"),
-            "category": get_standard_category(category, asset),
-            "asset": asset,
-            "currency": row.get("currency", ""),
-            "quantity": row.get("quantity") or row.get("amount"),
-            "price": row.get("price"),
-            "value_idr": row.get("value_idr"),
-            "value_usd": row.get("value_usd"),
-            "account": row.get("account", ""),
-            "details": row.get("details", "")
-        })
-    return standardized
+
 
 
 def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rate: float, output_path: Path):
@@ -614,7 +573,6 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", help="Date in YYYY-MM-DD format")
-    parser.add_argument("--skip-manual", action="store_true", help="Skip loading manual balances")
     args = parser.parse_args()
 
     td = args.date or pendulum.now().format("YYYY-MM-DD")
@@ -625,7 +583,6 @@ def main():
     debank_raw_path = data_dir / f"{td}_raw_debank.json"
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
     alchemy_curated_path = data_dir / f"{td}_curated_alchemy.json"
-    manual_csv_path = data_dir / "_manual_balances.csv"
     
     output_csv_path = data_dir / f"{td}_portfolio.csv"
     output_json_path = data_dir / f"{td}_snapshot.json"
@@ -669,41 +626,11 @@ def main():
             alchemy_loaded = True
         except Exception as e: print(f"Error loading Alchemy: {e}")
 
-    manual_loaded = False
-    manual_standardized = []
-    if manual_csv_path.exists():
-        try:
-            with open(manual_csv_path, "r") as f:
-                reader = csv.DictReader(f)
-                manual_raw = []
-                for row in reader:
-                    for field in ["quantity", "amount", "price", "value_idr", "value_usd"]:
-                        if row.get(field):
-                            try: row[field] = float(row[field])
-                            except: row[field] = 0.0
-                        else: row[field] = None
-                    manual_raw.append(row)
-            manual_standardized = standardize_manual_data(manual_raw)
-            manual_loaded = True
-        except Exception as e: print(f"Error loading Manual: {e}")
-
-
-
-    # Condition: manual balances are only for "today" by default, unless it's a specific date run
-    # Actually, the user says they are always latest, so we should skip them if td != today
-    today_str = pendulum.now().format("YYYY-MM-DD")
-    if args.skip_manual:
-        if manual_loaded:
-            print(f"ℹ Skipping manual balances for backfill/historical date {td}")
-            manual_loaded = False
-            manual_standardized = []
-
     all_data = (
         ksei_standardized
         + debank_standardized
         + binance_standardized
         + alchemy_standardized
-        + manual_standardized
     )
 
     all_data.sort(key=lambda x: (str(x.get("category") or ""), str(x.get("source") or ""), str(x.get("asset") or "")))
@@ -711,9 +638,6 @@ def main():
     # Add asset class to each item
     for item in all_data:
         item["asset_class"] = get_asset_class(item.get("category", "Other"))
-
-    # Add stable account identity fields for consumers that can link holdings to accounts.
-    enrich_account_identity(all_data)
 
     # Fill in missing currency values using exchange rate
     for item in all_data:
@@ -739,8 +663,6 @@ def main():
         "price",
         "value_idr",
         "value_usd",
-        "account_key",
-        "account_name",
         "account",
         "details",
     ]
@@ -752,13 +674,18 @@ def main():
     # Generate JSON Snapshot
     generate_snapshot_json(td, all_data, exchange_rate, output_json_path)
 
+    # Generate AI-Ready State and Digest
+    try:
+        build_and_save_ai_state(output_json_path)
+    except Exception as e:
+        print(f"⚠️ Warning: Failed to generate AI state/digest: {e}")
+
     # Print Summary
     sources_info = []
     if ksei_loaded: sources_info.append(f"KSEI ({len(ksei_standardized)} items)")
     if debank_loaded: sources_info.append(f"EVM Wallet ({len(debank_standardized)} items)")
     if binance_loaded: sources_info.append(f"Binance ({len(binance_standardized)} items)")
     if alchemy_loaded: sources_info.append(f"SOL Wallet ({len(alchemy_standardized)} items)")
-    if manual_loaded: sources_info.append(f"Manual ({len(manual_standardized)} items)")
 
     print_rich_summary(td, all_data, exchange_rate, sources_info)
     print(f"Output files:\n  - CSV: {output_csv_path}\n  - JSON: {output_json_path}")

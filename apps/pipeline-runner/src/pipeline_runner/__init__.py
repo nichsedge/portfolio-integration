@@ -110,9 +110,6 @@ def main():
     parser.add_argument(
         "--backfill", action="store_true", help="Generate for all dates that exist in data/"
     )
-    parser.add_argument(
-        "--skip-manual", action="store_true", help="Skip manual balances in integration"
-    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[4]
@@ -191,8 +188,6 @@ def main():
             integrator_path = portfolio_app_path / "src/portfolio_app/integrators/portfolio_integration.py"
             
             integrate_cmd = [sys.executable, str(integrator_path), "--date", current_date]
-            if args.skip_manual:
-                integrate_cmd.append("--skip-manual")
                 
             # Set verbose=True for integration to show the rich summary
             if _run_blocking_step("Integration", str(integrator_path.parent), integrate_cmd, verbose=True):
@@ -203,10 +198,16 @@ def main():
                     
                     output_csv_path = data_dir / f"{current_date}_portfolio.csv"
                     output_json_path = data_dir / f"{current_date}_snapshot.json"
+                    output_ai_state_path = data_dir / f"{current_date}_ai_state.json"
+                    output_ai_digest_path = data_dir / f"{current_date}_ai_digest.md"
                     
                     print(f"\n--- Step 3.5: GCS Upload ({current_date}) ---")
                     upload_to_gcs(output_json_path)
                     upload_to_gcs(output_csv_path)
+                    if output_ai_state_path.exists():
+                        upload_to_gcs(output_ai_state_path)
+                    if output_ai_digest_path.exists():
+                        upload_to_gcs(output_ai_digest_path)
                 except Exception as e:
                     print(f"⚠️ GCS upload failed: {e}")
 

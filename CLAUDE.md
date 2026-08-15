@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Python monorepo managed with `uv` that implements a 3-stage ETL pipeline for aggregating financial portfolio data from multiple platforms:
 
-1. **Extract:** Fetch raw data from sources (KSEI, DeBank, Binance, Alchemy) and read manual entries from `_manual_balances.csv`
+1. **Extract:** Fetch raw data from automated sources (KSEI, DeBank, Binance, Alchemy)
 2. **Transform:** Clean and filter each source into a curated format
-3. **Load:** Integrate all sources into a unified portfolio CSV
-4. **Visualize:** Generate portfolio insights and plots (Step 4 of pipeline)
+3. **Load:** Integrate all sources into a unified portfolio CSV and snapshot JSON
+4. **Visualize:** Generate portfolio insights, plots, and AI state digest
 
 ### Workspace Structure
 
@@ -54,6 +54,13 @@ uv run alchemy-fetch
 uv run run-all         # Full pipeline: fetch + transform + integrate + GCS upload
 uv run fetch-only      # Only fetch raw data for all sources
 uv run integrate-only  # Skip fetching, just transform/integrate
+
+# AI Agent & MCP Integration (Hermes, Claude, Cursor, Goose)
+uv run portfolio-mcp --audit    # Run automated portfolio health check
+uv run portfolio-mcp --digest   # Output latest token-optimized Markdown brief
+uv run portfolio-mcp --json     # Output latest token-optimized state JSON
+uv run portfolio-mcp --mcp      # Run as stdio JSON-RPC 2.0 MCP server
+uv run portfolio-ai-state       # Regenerate latest AI state and digest
 ```
 
 ## Data Pipeline File Conventions
@@ -62,8 +69,8 @@ All data files use date-based naming in the configured data directory (from `POR
 
 - Raw output: `YYYY-MM-DD_raw_<source>.json`
 - Curated output: `YYYY-MM-DD_curated_<source>.json`
-- Manual input: `_manual_balances.csv` (Optional)
-- Final integrated: `YYYY-MM-DD_portfolio.csv`
+- Final integrated: `YYYY-MM-DD_portfolio.csv` & `YYYY-MM-DD_snapshot.json`
+- AI digest: `latest_ai_state.json` & `latest_ai_digest.md`
 
 The standard integration schema is:
 - `source` - Data source name

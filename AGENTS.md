@@ -24,7 +24,6 @@ This is a Python monorepo managed with `uv` that implements an ETL pipeline for 
    - **DeBank**: Centralized repository `github.com/nichsedge/debank-scraper` (CLI: `uv run debank-scrape`)
    - **Binance**: `packages/binance-client` (CLI: `uv run binance-fetch`)
    - **Alchemy**: `packages/alchemy-client` (CLI: `uv run alchemy-fetch`)
-   - **Manual**: `data/_manual_balances.csv`
 2. **Transform**: `packages/portfolio-app/src/portfolio_app/transformers/`
 3. **Integrate**: `packages/portfolio-app/src/portfolio_app/integrators/portfolio_integration.py`
 4. **Cloud Upload & Insights**: Uploads daily snapshot JSON/CSV to Google Cloud Storage.
@@ -47,4 +46,11 @@ secrun uv run alchemy-fetch
 secrun uv run run-all         # Full pipeline: fetch + transform + integrate + GCS upload
 secrun uv run fetch-only      # Fetch all sources in parallel
 secrun uv run integrate-only  # Skip fetching, just transform and integrate
+
+# AI Agent & MCP Integration (Hermes, Claude, Cursor, Goose)
+uv run portfolio-mcp --audit    # Run automated portfolio health check
+uv run portfolio-mcp --digest   # Output latest token-optimized Markdown brief
+uv run portfolio-mcp --json     # Output latest token-optimized state JSON
+uv run portfolio-mcp --mcp      # Run as stdio JSON-RPC 2.0 MCP server
+uv run portfolio-ai-state       # Regenerate latest AI state and digest
 ```

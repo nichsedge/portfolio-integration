@@ -1,5 +1,0 @@
-source,category,asset,currency,quantity,price,value_idr,value_usd,account,details
-Bank BCA,Bank Account,BCA Savings,IDR,1,12500000,12500000,,1234567890,Emergency fund savings
-Physical,Gold,Antam Gold,IDR,10,1200000,12000000,,Safe Box,10 grams physical gold bar
-Qazwa,P2P Lending,Syariah Funding,IDR,1,5000000,5000000,,Campaign #987,12% est. APR
-US Wallet,Stablecoin,USDC,USD,150,1.0,,150,EVM Wallet,Liquid cash in USD
