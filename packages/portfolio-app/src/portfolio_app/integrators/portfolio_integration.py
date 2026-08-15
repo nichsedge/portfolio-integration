@@ -24,6 +24,7 @@ sys.path.append(str(repo_root / "packages/transform-core/src"))
 from portfolio_app.transformers.ksei_transform import clean_json
 from portfolio_app.transformers.debank_transform import extract_relevant
 from portfolio_app.ai_state_generator import build_and_save_ai_state
+from portfolio_app.data_validator import validate_holdings_and_sources, print_data_quality_report
 from transform_core import get_data_dir, parse_usd, get_exchange_rate, FILTER_THRESHOLDS
 
 
@@ -117,8 +118,8 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     standardized = []
 
     # Process cash
-    if "cash" in ksei_data:
-        for entry in ksei_data["cash"].get("data", []):
+    if ksei_data.get("cash") and isinstance(ksei_data["cash"], dict):
+        for entry in ksei_data["cash"].get("data") or []:
             currency = entry.get("currCode", "IDR")
             if currency == "IDR":
                 value_idr = entry.get("saldoIdr", 0)
@@ -156,8 +157,8 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             })
 
     # Process equity
-    if "equity" in ksei_data:
-        for entry in ksei_data["equity"].get("data", []):
+    if ksei_data.get("equity") and isinstance(ksei_data["equity"], dict):
+        for entry in ksei_data["equity"].get("data") or []:
             # Filter dust
             value_idr = entry.get("nilaiInvestasi", 0)
             if value_idr < FILTER_THRESHOLDS["IDR"]:
@@ -177,8 +178,8 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             })
 
     # Process mutual funds
-    if "mutual_fund" in ksei_data:
-        for entry in ksei_data["mutual_fund"].get("data", []):
+    if ksei_data.get("mutual_fund") and isinstance(ksei_data["mutual_fund"], dict):
+        for entry in ksei_data["mutual_fund"].get("data") or []:
             asset_name = entry.get("efek", "Unknown")
             category = "Equity Fund"
             if any(term in asset_name for term in ["Bond", "Fixed Income", "SBN", "Obligasi"]):
@@ -210,8 +211,8 @@ def standardize_ksei_data(ksei_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             })
 
     # Process bonds
-    if "bond" in ksei_data:
-        for entry in ksei_data["bond"].get("data", []):
+    if ksei_data.get("bond") and isinstance(ksei_data["bond"], dict):
+        for entry in ksei_data["bond"].get("data") or []:
             # Filter dust
             value_idr = entry.get("nilaiInvestasi", 0)
             if value_idr < FILTER_THRESHOLDS["IDR"]:
@@ -573,6 +574,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", help="Date in YYYY-MM-DD format")
+    parser.add_argument("--force", action="store_true", help="Force integration even if data quality validation fails")
     args = parser.parse_args()
 
     td = args.date or pendulum.now().format("YYYY-MM-DD")
@@ -651,6 +653,29 @@ def main():
         elif v_idr is None and v_usd is None:
             item["value_idr"] = 0.0
             item["value_usd"] = 0.0
+
+    # Load previous valid snapshot for anomaly comparison
+    previous_snapshot = None
+    all_prev_snapshots = sorted([
+        f for f in data_dir.glob("*_snapshot.json") 
+        if not f.name.startswith("latest") and f.name < f"{td}_snapshot.json"
+    ])
+    if all_prev_snapshots:
+        try:
+            with open(all_prev_snapshots[-1], "r", encoding="utf-8") as f:
+                previous_snapshot = json.load(f)
+        except Exception:
+            pass
+
+    # Run Data Quality Validation Gate
+    crit_errors, warnings = validate_holdings_and_sources(all_data, exchange_rate, previous_snapshot)
+    total_net_worth = sum(h.get("value_idr", 0.0) for h in all_data)
+    passed = print_data_quality_report(crit_errors, warnings, td, len(all_data), total_net_worth)
+
+    if not passed and not args.force:
+        print("\n❌ Aborting integration to protect snapshots, GCS, and AI states from corrupted/partial data.")
+        print("💡 Fix the failing data source or run with --force to override.")
+        sys.exit(1)
 
     # Write CSV
     fieldnames = [

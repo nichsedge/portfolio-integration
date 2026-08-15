@@ -18,42 +18,41 @@ def is_valid_investment(entry):
 
 
 def clean_json(data):
+    if not isinstance(data, dict):
+        return {}
+
     filtered = {}
 
     # Filter cash
-    if "cash" in data:
+    if data.get("cash") and isinstance(data["cash"], dict):
+        cash_entries = data["cash"].get("data") or []
         filtered["cash"] = {
             **data["cash"],
-            "data": [entry for entry in data["cash"]["data"] if is_valid_cash(entry)],
+            "data": [entry for entry in cash_entries if is_valid_cash(entry)],
         }
 
     # Filter equity
-    if "equity" in data:
+    if data.get("equity") and isinstance(data["equity"], dict):
+        equity_entries = data["equity"].get("data") or []
         filtered["equity"] = {
             **data["equity"],
-            "data": [
-                entry for entry in data["equity"]["data"] if is_valid_investment(entry)
-            ],
+            "data": [entry for entry in equity_entries if is_valid_investment(entry)],
         }
 
     # Filter mutual_fund
-    if "mutual_fund" in data:
+    if data.get("mutual_fund") and isinstance(data["mutual_fund"], dict):
+        mf_entries = data["mutual_fund"].get("data") or []
         filtered["mutual_fund"] = {
             **data["mutual_fund"],
-            "data": [
-                entry
-                for entry in data["mutual_fund"]["data"]
-                if is_valid_investment(entry)
-            ],
+            "data": [entry for entry in mf_entries if is_valid_investment(entry)],
         }
 
     # Filter bond
-    if "bond" in data:
+    if data.get("bond") and isinstance(data["bond"], dict):
+        bond_entries = data["bond"].get("data") or []
         filtered["bond"] = {
             **data["bond"],
-            "data": [
-                entry for entry in data["bond"]["data"] if is_valid_investment(entry)
-            ],
+            "data": [entry for entry in bond_entries if is_valid_investment(entry)],
         }
 
     return filtered

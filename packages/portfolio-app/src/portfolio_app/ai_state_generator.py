@@ -359,7 +359,7 @@ def build_and_save_ai_state(snapshot_path: Path, output_dir: Optional[Path] = No
     return ai_state
 
 
-if __name__ == "__main__":
+def main():
     import argparse
     parser = argparse.ArgumentParser(description="Generate AI Financial State and Digest")
     parser.add_argument("--date", help="Date in YYYY-MM-DD format (defaults to latest available)")
@@ -369,10 +369,14 @@ if __name__ == "__main__":
     if args.date:
         target_file = data_dir / f"{args.date}_snapshot.json"
     else:
-        snapshots = sorted(list(data_dir.glob("*_snapshot.json")))
+        snapshots = sorted([f for f in data_dir.glob("*_snapshot.json") if not f.name.startswith("latest")])
         if not snapshots:
             print("❌ No snapshots found in data directory.")
             exit(1)
         target_file = snapshots[-1]
 
     build_and_save_ai_state(target_file)
+
+
+if __name__ == "__main__":
+    main()
