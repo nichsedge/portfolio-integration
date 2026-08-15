@@ -37,14 +37,14 @@ This is a Python monorepo managed with `uv` that implements an ETL pipeline for 
 # Sync dependencies
 uv sync
 
-# Run specific fetchers only (PREFERRED when developing)
-uv run debank-scrape
-uv run ksei dump
-uv run binance-fetch
-uv run alchemy-fetch
+# Run specific fetchers only (PREFERRED when developing, use secrun for API keys)
+secrun uv run debank-scrape
+secrun uv run ksei dump
+secrun uv run binance-fetch
+secrun uv run alchemy-fetch
 
 # Full pipeline options (Only run when explicitly requested)
-uv run run-all         # Full pipeline: fetch + transform + integrate + GCS upload
-uv run fetch-only      # Fetch all sources in parallel
-uv run integrate-only  # Skip fetching, just transform and integrate
+secrun uv run run-all         # Full pipeline: fetch + transform + integrate + GCS upload
+secrun uv run fetch-only      # Fetch all sources in parallel
+secrun uv run integrate-only  # Skip fetching, just transform and integrate
 ```
