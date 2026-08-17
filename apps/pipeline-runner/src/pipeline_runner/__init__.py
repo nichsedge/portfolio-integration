@@ -196,14 +196,12 @@ def main():
                     sys.path.insert(0, str(portfolio_app_path / "src"))
                     from portfolio_app.gcs_uploader import upload_to_gcs
                     
-                    output_csv_path = data_dir / f"{current_date}_portfolio.csv"
                     output_json_path = data_dir / f"{current_date}_snapshot.json"
                     output_ai_state_path = data_dir / f"{current_date}_ai_state.json"
                     output_ai_digest_path = data_dir / f"{current_date}_ai_digest.md"
                     
                     print(f"\n--- Step 3.5: GCS Upload ({current_date}) ---")
                     upload_to_gcs(output_json_path)
-                    upload_to_gcs(output_csv_path)
                     if output_ai_state_path.exists():
                         upload_to_gcs(output_ai_state_path)
                     if output_ai_digest_path.exists():

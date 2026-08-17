@@ -586,7 +586,6 @@ def main():
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
     alchemy_curated_path = data_dir / f"{td}_curated_alchemy.json"
     
-    output_csv_path = data_dir / f"{td}_portfolio.csv"
     output_json_path = data_dir / f"{td}_snapshot.json"
 
     # Loading Data
@@ -677,25 +676,6 @@ def main():
         print("💡 Fix the failing data source or run with --force to override.")
         sys.exit(1)
 
-    # Write CSV
-    fieldnames = [
-        "source",
-        "category",
-        "asset_class",
-        "asset",
-        "currency",
-        "quantity",
-        "price",
-        "value_idr",
-        "value_usd",
-        "account",
-        "details",
-    ]
-    with open(output_csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(all_data)
-
     # Generate JSON Snapshot
     generate_snapshot_json(td, all_data, exchange_rate, output_json_path)
 
@@ -713,7 +693,7 @@ def main():
     if alchemy_loaded: sources_info.append(f"SOL Wallet ({len(alchemy_standardized)} items)")
 
     print_rich_summary(td, all_data, exchange_rate, sources_info)
-    print(f"Output files:\n  - CSV: {output_csv_path}\n  - JSON: {output_json_path}")
+    print(f"Output files:\n  - JSON Snapshot: {output_json_path}")
 
 
 if __name__ == "__main__":

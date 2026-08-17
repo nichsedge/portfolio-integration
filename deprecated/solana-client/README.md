@@ -21,7 +21,7 @@ uv pip install -e packages/solana-client
 
 ```bash
 # Set your wallet address in .env
-echo "SOLANA_WALLET_ADDRESS=your_wallet_address_here" > .env
+echo "SOL_ADDRESS=your_wallet_address_here" > .env
 
 # Run the fetcher
 solana-fetch
@@ -30,22 +30,23 @@ solana-fetch
 ### Python API
 
 ```python
-from solana_client import fetch_holdings
-from solders.pubkey import Pubkey
+from solana_client import SolanaFetcher, Pubkey
 
+# Initialize with wallet address
 wallet = Pubkey.from_string("your_wallet_address")
-holdings = fetch_holdings(wallet)
-print(holdings)
+fetcher = SolanaFetcher(wallet)
+
+# Fetch all balances and tokens
+data = fetcher.fetch_all()
+print(data)
 ```
 
 ## Configuration
 
-Create a `.env` file with:
+Set the following environment variables:
 
-```
-SOLANA_WALLET_ADDRESS=your_wallet_address_here
+- `SOL_ADDRESS`: Your Solana wallet public key (required)
 # RPC_URL=https://api.mainnet-beta.solana.com  # Optional
-```
 
 ## Output
 

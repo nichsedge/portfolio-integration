@@ -20,11 +20,11 @@ def main(output_dir=None):
     except ImportError:
         print("Warning: python-dotenv not installed. Using environment variables only.")
 
-    wallet_address = os.getenv("WALLET_ADDRESS")
+    wallet_address = os.getenv("SOL_ADDRESS")
     alchemy_api_key = os.getenv("ALCHEMY_API_KEY")
 
     if not wallet_address:
-        print("Error: WALLET_ADDRESS not found in environment")
+        print("Error: SOL_ADDRESS not found in environment")
         return
 
     if not alchemy_api_key:

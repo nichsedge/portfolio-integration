@@ -6,6 +6,7 @@ matplotlib.use('Agg')  # Use non-interactive backend for headless environments
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
+import json
 import requests
 
 # Constants
@@ -25,13 +26,21 @@ def get_exchange_rate():
 EXCHANGE_RATE = get_exchange_rate()
 
 def load_data():
-    files = glob.glob(os.path.join(DATA_DIR, "*_portfolio.csv"))
+    files = sorted(glob.glob(os.path.join(DATA_DIR, "*_snapshot.json")))
     all_data = []
     
     for file in files:
-        date_str = os.path.basename(file).split('_')[0]
+        if os.path.basename(file).startswith("latest"):
+            continue
         try:
-            df = pd.read_csv(file)
+            with open(file, "r", encoding="utf-8") as f:
+                content = json.load(f)
+            metadata = content.get("metadata", {})
+            date_str = metadata.get("date") or os.path.basename(file).split('_')[0]
+            holdings = content.get("holdings", [])
+            if not holdings:
+                continue
+            df = pd.DataFrame(holdings)
             df['date'] = pd.to_datetime(date_str)
             all_data.append(df)
         except Exception as e:

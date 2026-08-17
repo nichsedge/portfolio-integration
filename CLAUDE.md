@@ -110,9 +110,9 @@ Follow the standardized fetcher package pattern:
 
 - `PORTFOLIO_DATA_DIR` (or `DATA_DIR`) - Data directory path
 - `KSEI_USERNAME` / `KSEI_PASSWORD` - KSEI credentials
-- `EVM_ADDRESS` - DeBank wallet address
+- `ETH_ADDRESS` - DeBank wallet address
 - `BINANCE_API_KEY` / `BINANCE_API_SECRET` - Binance API
-- `WALLET_ADDRESS` / `ALCHEMY_API_KEY` - Alchemy configuration
+- `SOL_ADDRESS` / `ALCHEMY_API_KEY` - Alchemy configuration
 
 ## Key Implementation Details
 

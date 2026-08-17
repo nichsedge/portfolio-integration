@@ -154,15 +154,18 @@ def main(output_dir=None):
     except ImportError:
         print("Warning: python-dotenv not installed. Using environment variables only.")
 
-    wallet_addr = os.getenv("SOLANA_WALLET_ADDRESS")
+    wallet_addr = os.getenv("SOL_ADDRESS")
     rpc_url = os.getenv("RPC_URL", "https://api.mainnet-beta.solana.com")
 
     # Use provided output_dir or environment variable or current directory
     if output_dir is None:
         output_dir = os.getenv("PORTFOLIO_DATA_DIR", ".")
+    
+    if not wallet_addr:
+        wallet_addr = get_solana_address()
 
     if not wallet_addr:
-        print("Error: SOLANA_WALLET_ADDRESS not found in environment")
+        print("Error: SOL_ADDRESS not found in environment")
         return
 
     print(f"Fetching holdings for wallet: {wallet_addr}")

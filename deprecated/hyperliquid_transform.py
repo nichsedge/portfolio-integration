@@ -308,11 +308,11 @@ def main():
     parser.add_argument("--date", help="Date in YYYY-MM-DD format")
     args = parser.parse_args()
 
-    wallet_address = os.getenv("HYPERLIQUID_WALLET_ADDRESS")
+    wallet_address = os.getenv("HLP_ADDRESS")
 
     if not wallet_address:
-        print("Error: HYPERLIQUID_WALLET_ADDRESS environment variable not set")
-        print("Set it with: export HYPERLIQUID_WALLET_ADDRESS=0x...")
+        print("Error: HLP_ADDRESS environment variable not set")
+        print("Set it with: export HLP_ADDRESS=0x...")
         return
 
     data = save_hyperliquid_data(wallet_address, date_str=args.date)

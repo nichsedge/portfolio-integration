@@ -43,8 +43,6 @@ def upload_to_gcs(file_path: Path, bucket_name: str = None, is_latest: bool = Fa
             prefix = "ai"
         elif file_path.suffix == ".json":
             prefix = "snapshots"
-        elif file_path.suffix == ".csv":
-            prefix = "portfolios"
         else:
             prefix = "misc"
 
@@ -55,7 +53,7 @@ def upload_to_gcs(file_path: Path, bucket_name: str = None, is_latest: bool = Fa
         blob.upload_from_filename(str(file_path))
         print(f"✅ Successfully uploaded to gs://{bucket_name}/{destination_blob_name}")
 
-        # If this is a primary dated snapshot/csv/ai file, also update the canonical 'latest' pointer
+        # If this is a primary dated snapshot/ai file, also update the canonical 'latest' pointer
         if not file_path.name.startswith("latest"):
             if "_snapshot.json" in file_path.name:
                 latest_blob = bucket.blob(f"{prefix}/latest.json")
@@ -69,10 +67,6 @@ def upload_to_gcs(file_path: Path, bucket_name: str = None, is_latest: bool = Fa
                 latest_blob = bucket.blob(f"{prefix}/latest_digest.md")
                 latest_blob.upload_from_filename(str(file_path))
                 print(f"📌 Updated gs://{bucket_name}/{prefix}/latest_digest.md")
-            elif "_portfolio.csv" in file_path.name:
-                latest_blob = bucket.blob(f"{prefix}/latest.csv")
-                latest_blob.upload_from_filename(str(file_path))
-                print(f"📌 Updated gs://{bucket_name}/{prefix}/latest.csv")
 
         return True
     except Exception as e:

@@ -10,8 +10,8 @@ if __name__ == "__main__":
     load_dotenv()
 
     # Check if wallet address is set
-    if not os.getenv("SOLANA_WALLET_ADDRESS"):
-        print("Please set SOLANA_WALLET_ADDRESS in your .env file")
+    if not os.getenv("SOL_ADDRESS"):
+        print("Please set SOL_ADDRESS in your .env file")
         exit(1)
 
     # Run the fetcher
