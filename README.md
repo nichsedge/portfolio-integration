@@ -66,7 +66,7 @@ portfolio-integration/
 │   └── pipeline-runner/           # Orchestrates the pipeline
 ├── CONTRIBUTING.md                # How to contribute
 ├── DEVELOPMENT.md                 # Development guide
-└── CLAUDE.md                      # AI assistant guidance
+└── AGENTS.md                      # AI assistant guidance
 ```
 
 ## Workflow
