@@ -16,7 +16,7 @@ cp .env.template .env
 # Edit .env with your API credentials
 
 # Run the script
-uv run ccxt_balance.py
+uv run binance-fetch
 ```
 
 ## Environment Variables

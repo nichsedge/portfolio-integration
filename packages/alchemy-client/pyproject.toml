@@ -3,9 +3,6 @@ name = "alchemy-client"
 version = "0.1.0"
 description = "Fetch token holdings from Alchemy API"
 readme = "README.md"
-authors = [
-    { name = "Amal", email = "muhammad.ichsanul19@gmail.com" }
-]
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.31.0",
@@ -17,5 +14,5 @@ dependencies = [
 alchemy-fetch = "alchemy_client:main"
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.10.0"]
+requires = ["uv_build>=0.9.26,<0.12.0"]
 build-backend = "uv_build"
