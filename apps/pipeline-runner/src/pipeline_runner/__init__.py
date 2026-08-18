@@ -67,23 +67,30 @@ def _start_non_blocking_step(
     return process
 
 
-def _wait_for_steps(steps: Dict[str, subprocess.Popen[Any]]) -> bool:
-    """Wait for all subprocesses to complete and log results. Returns False on any failure."""
-    all_success = True
+def _wait_for_steps(steps: Dict[str, subprocess.Popen[Any]], timeout: int = 180) -> Dict[str, Dict[str, Any]]:
+    """Wait for all subprocesses to complete with a timeout and return results."""
     results: Dict[str, Any] = {}
 
     for name, proc in steps.items():
-        stdout, stderr = proc.communicate()
-        results[name] = {
-            "returncode": proc.returncode,
-            "stdout": stdout,
-            "stderr": stderr,
-        }
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+            results[name] = {
+                "returncode": proc.returncode,
+                "stdout": stdout,
+                "stderr": stderr,
+            }
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate()
+            results[name] = {
+                "returncode": -1,
+                "stdout": stdout,
+                "stderr": f"❌ Process timed out after {timeout}s and was terminated.",
+            }
 
     print("\n--- Fetch Results ---")
     for name, res in results.items():
         if res["returncode"] != 0:
-            all_success = False
             print(f"❌ {name} failed with exit code {res['returncode']}")
             if res["stdout"]:
                 print(f"--- {name} STDOUT ---")
@@ -98,7 +105,40 @@ def _wait_for_steps(steps: Dict[str, subprocess.Popen[Any]]) -> bool:
                 print(f"  > {first_line.strip()}")
 
     print()
-    return all_success
+    return results
+
+
+def _attempt_fallback_cache(failed_sources: list[str], data_dir: Path, today: str) -> bool:
+    """Attempts to copy previous day's raw data for failed sources."""
+    import shutil
+    source_map = {
+        "KSEI": "ksei",
+        "DeBank": "debank",
+        "Binance": "binance",
+        "Alchemy": "alchemy"
+    }
+
+    all_recovered = True
+    for name in failed_sources:
+        src_tag = source_map.get(name, name.lower())
+        # Find latest available previous raw or curated file
+        pattern = f"*_raw_{src_tag}.json" if src_tag != "alchemy" else "*_curated_alchemy.json"
+        prev_files = sorted([
+            f for f in data_dir.glob(pattern)
+            if not f.name.startswith(today) and not f.name.startswith("latest")
+        ])
+
+        if prev_files:
+            latest_prev = prev_files[-1]
+            target_name = f"{today}_raw_{src_tag}.json" if src_tag != "alchemy" else f"{today}_curated_alchemy.json"
+            target_path = data_dir / target_name
+            shutil.copyfile(latest_prev, target_path)
+            print(f"⚠️ [FALLBACK] Reused cached {name} data from {latest_prev.name} -> {target_name}")
+        else:
+            print(f"❌ [FALLBACK FAILED] No historical cache found for {name}")
+            all_recovered = False
+
+    return all_recovered
 
 
 def main():
@@ -109,6 +149,12 @@ def main():
     )
     parser.add_argument(
         "--backfill", action="store_true", help="Generate for all dates that exist in data/"
+    )
+    parser.add_argument(
+        "--fallback-cached", action="store_true", help="Fallback to previous day's cache if a fetch fails"
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=180, help="Per-fetcher subprocess timeout in seconds (default 180)"
     )
     args = parser.parse_args()
 
@@ -124,6 +170,8 @@ def main():
 
     print("🚀 Portfolio Integration Pipeline")
     print(f"Data directory: {data_dir}\n")
+
+    today = pendulum.now().format("YYYY-MM-DD")
 
     if not args.integrate and not args.backfill:
         print("--- Step 1: Fetch Raw Data ---")
@@ -144,10 +192,18 @@ def main():
         if alchemy_path.exists():
             processes["Alchemy"] = _start_non_blocking_step("Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"])
 
+        fetch_results = _wait_for_steps(processes, timeout=args.timeout)
+        failed_steps = [name for name, res in fetch_results.items() if res["returncode"] != 0]
 
-        if not _wait_for_steps(processes):
-            print("\nPipeline failed during data fetching. Aborting.")
-            sys.exit(1)
+        if failed_steps:
+            if args.fallback_cached:
+                print(f"⚠️ Attempting cache fallback for failed steps: {', '.join(failed_steps)}")
+                if not _attempt_fallback_cache(failed_steps, data_dir, today):
+                    print("\nPipeline failed during data fetching and fallback failed. Aborting.")
+                    sys.exit(1)
+            else:
+                print("\nPipeline failed during data fetching. Run with --fallback-cached to use previous day's data. Aborting.")
+                sys.exit(1)
 
     if not args.fetch_only:
         dates_to_process = [pendulum.now().format("YYYY-MM-DD")]

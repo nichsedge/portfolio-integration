@@ -26,6 +26,7 @@ dependencies = [
 [project.scripts]
 portfolio-mcp = "portfolio_app.mcp_server:main"
 portfolio-ai-state = "portfolio_app.ai_state_generator:main"
+portfolio-dashboard = "portfolio_app.dashboard:main"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.12.0"]

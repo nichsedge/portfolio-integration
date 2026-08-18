@@ -10,10 +10,16 @@ managed = true
 [project]
 name = "portfolio-integration"
 version = "0.1.0"
-description = "Portfolio integration monorepo (workspace coordinator)"
+description = "Unified financial portfolio ETL pipeline & MCP server aggregating KSEI, DeBank, Binance, and Alchemy"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
     "pipeline-runner",
+    "portfolio-app",
+    "binance-client",
+    "alchemy-client",
+    "transform-core",
     "ksei",
     "debank-scraper",
     "pendulum>=3.0.0",
@@ -29,6 +35,10 @@ dev = [
 
 [tool.uv.sources]
 pipeline-runner = { workspace = true }
+portfolio-app = { workspace = true }
+binance-client = { workspace = true }
+alchemy-client = { workspace = true }
+transform-core = { workspace = true }
 ksei = { git = "https://github.com/nichsedge/ksei.git" }
 debank-scraper = { git = "https://github.com/nichsedge/debank-scraper.git" }
 

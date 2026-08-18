@@ -128,7 +128,7 @@ Follow the standardized fetcher package pattern:
 - `ETH_ADDRESS`: DeBank EVM wallet address
 - `BINANCE_API_KEY` / `BINANCE_API_SECRET`: Binance API credentials
 - `SOL_ADDRESS` / `ALCHEMY_API_KEY`: Alchemy Solana configuration
-- `GCS_BUCKET_NAME`: Google Cloud Storage bucket destination
+- `PORTFOLIO_GCS_BUCKET` (or `GCS_BUCKET_NAME`): Google Cloud Storage bucket destination
 
 ---
 

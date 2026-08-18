@@ -24,10 +24,10 @@ def get_storage_client() -> storage.Client:
 def upload_to_gcs(file_path: Path, bucket_name: str = None, is_latest: bool = False) -> bool:
     """Uploads a portfolio file to Google Cloud Storage if a bucket is configured."""
     if not bucket_name:
-        bucket_name = os.getenv("PORTFOLIO_GCS_BUCKET")
+        bucket_name = os.getenv("PORTFOLIO_GCS_BUCKET") or os.getenv("GCS_BUCKET_NAME")
         
     if not bucket_name:
-        print("⚠️ PORTFOLIO_GCS_BUCKET is not set. Skipping GCS upload.")
+        print("⚠️ PORTFOLIO_GCS_BUCKET (or GCS_BUCKET_NAME) is not set. Skipping GCS upload.")
         return False
         
     if not file_path.exists():

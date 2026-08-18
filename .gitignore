@@ -46,6 +46,8 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+.secrets
+*.secrets
 
 # IDEs
 .vscode/

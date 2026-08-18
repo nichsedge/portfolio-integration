@@ -1638,11 +1638,15 @@ name = "portfolio-integration"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "alchemy-client" },
+    { name = "binance-client" },
     { name = "debank-scraper" },
     { name = "ksei" },
     { name = "pendulum" },
     { name = "pipeline-runner" },
+    { name = "portfolio-app" },
     { name = "python-dotenv" },
+    { name = "transform-core" },
 ]
 
 [package.dev-dependencies]
@@ -1654,11 +1658,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alchemy-client", editable = "packages/alchemy-client" },
+    { name = "binance-client", editable = "packages/binance-client" },
     { name = "debank-scraper", git = "https://github.com/nichsedge/debank-scraper.git" },
     { name = "ksei", git = "https://github.com/nichsedge/ksei.git" },
     { name = "pendulum", specifier = ">=3.0.0" },
     { name = "pipeline-runner", editable = "apps/pipeline-runner" },
+    { name = "portfolio-app", editable = "packages/portfolio-app" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "transform-core", editable = "packages/transform-core" },
 ]
 
 [package.metadata.requires-dev]

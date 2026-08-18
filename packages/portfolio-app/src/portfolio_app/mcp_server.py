@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional
 
 # Setup imports
 try:
-    from transform_core import get_data_dir
+    from transform_core import get_data_dir, get_exchange_rate
     from portfolio_app.ai_state_generator import (
         build_and_save_ai_state,
         generate_ai_digest_markdown,
@@ -23,7 +23,7 @@ except ImportError:
     repo_root = Path(__file__).resolve().parents[4]
     sys.path.append(str(repo_root / "packages/portfolio-app/src"))
     sys.path.append(str(repo_root / "packages/transform-core/src"))
-    from transform_core import get_data_dir
+    from transform_core import get_data_dir, get_exchange_rate
     from portfolio_app.ai_state_generator import (
         build_and_save_ai_state,
         generate_ai_digest_markdown,
@@ -121,7 +121,7 @@ def tool_get_holdings_breakdown(
 
 def tool_get_historical_performance(months: int = 6) -> List[Dict[str, Any]]:
     """
-    Returns the multi-month trajectory of net worth and asset class allocations.
+    Returns the multi-month trajectory of pure portfolio investments and True Net Worth (with reconstructed cash).
     """
     data_dir = get_data_dir()
     all_snapshots = load_historical_snapshots(data_dir)
@@ -129,18 +129,36 @@ def tool_get_historical_performance(months: int = 6) -> List[Dict[str, Any]]:
         return []
 
     recent = all_snapshots[-months:]
+
+    from portfolio_app.cashflow_analyzer import resolve_sans_finance_db, reconstruct_historical_net_worth
+    db_path = resolve_sans_finance_db(data_dir=data_dir, auto_pull_gcs=False)
+    reconstructed_map = {}
+    if db_path and db_path.exists():
+        reconstructed = reconstruct_historical_net_worth(db_path, recent)
+        reconstructed_map = {r["date"]: r for r in reconstructed}
+
     history = []
     for s in recent:
         s_meta = s.get("metadata", {})
         s_totals = s.get("totals", {})
+        d_str = s_meta.get("date")
         allocations = {
             item.get("asset_class", "Other"): item.get("percentage", 0.0)
             for item in s.get("allocation", {}).get("by_asset_class", [])
         }
+        rec = reconstructed_map.get(d_str, {})
+        port_val_idr = s_totals.get("net_worth_idr", 0.0)
+        cash_val_idr = rec.get("reconstructed_cash_idr", 0.0)
+        true_nw_idr = rec.get("true_net_worth_idr", port_val_idr)
+        fx = s_meta.get("exchange_rate") or get_exchange_rate()
+
         history.append({
-            "date": s_meta.get("date"),
-            "net_worth_idr": s_totals.get("net_worth_idr", 0.0),
-            "net_worth_usd": s_totals.get("net_worth_usd", 0.0),
+            "date": d_str,
+            "portfolio_value_idr": port_val_idr,
+            "portfolio_value_usd": s_totals.get("net_worth_usd", round(port_val_idr / fx, 2)),
+            "reconstructed_cash_idr": cash_val_idr,
+            "true_net_worth_idr": true_nw_idr,
+            "true_net_worth_usd": round(true_nw_idr / fx, 2),
             "fixed_income_pct": allocations.get("Fixed Income", 0.0),
             "equities_pct": allocations.get("Equities", 0.0),
             "crypto_pct": allocations.get("Crypto", 0.0),
@@ -149,6 +167,261 @@ def tool_get_historical_performance(months: int = 6) -> List[Dict[str, Any]]:
         })
 
     return history
+
+
+def tool_get_cashflow_analysis(months: int = 3) -> Dict[str, Any]:
+    """
+    Returns monthly cashflow metrics from Sans Finance: income, expenses, net savings,
+    burn rate, and category breakdowns.
+    """
+    from portfolio_app.cashflow_analyzer import (
+        resolve_sans_finance_db,
+        get_cashflow_metrics,
+        get_live_accounts,
+    )
+    data_dir = get_data_dir()
+    db_path = resolve_sans_finance_db(data_dir=data_dir, auto_pull_gcs=True)
+    if not db_path or not db_path.exists():
+        return {"error": "Sans Finance database snapshot not found locally or in GCS."}
+
+    fx = get_exchange_rate()
+    cashflow = get_cashflow_metrics(db_path, months=months, exchange_rate=fx)
+    accounts = get_live_accounts(db_path, exchange_rate=fx)
+
+    return {
+        "db_source": str(db_path.name),
+        "exchange_rate": fx,
+        "live_liquid_accounts": accounts,
+        "cashflow_metrics": cashflow,
+    }
+
+
+def tool_get_unified_financial_state() -> Dict[str, Any]:
+    """
+    Combines investment portfolio (stocks, crypto, defi, fixed income) with live cashflow,
+    bank account balances, and emergency runway from Sans Finance.
+    """
+    from portfolio_app.cashflow_analyzer import (
+        resolve_sans_finance_db,
+        get_cashflow_metrics,
+        get_live_accounts,
+        calculate_runway,
+    )
+    overview = tool_get_portfolio_overview()
+    if "error" in overview:
+        return overview
+
+    data_dir = get_data_dir()
+    fx = overview.get("exchange_rate_usd_idr") or get_exchange_rate()
+    db_path = resolve_sans_finance_db(data_dir=data_dir, auto_pull_gcs=True)
+
+    cashflow_info = {}
+    if db_path and db_path.exists():
+        accounts = get_live_accounts(db_path, fx)
+        cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
+        portfolio_cash = overview["liquidity"]["liquid_cash_idr"]
+        total_liquid_idr = portfolio_cash + accounts["total_liquid_idr"]
+        runway = calculate_runway(total_liquid_idr, cf["avg_monthly_burn_idr"])
+
+        portfolio_nw = overview["macro_metrics"]["net_worth_idr"]
+        consolidated_nw_idr = portfolio_nw + accounts["total_liquid_idr"]
+
+        cashflow_info = {
+            "sans_finance_db": str(db_path.name),
+            "consolidated_net_worth_idr": consolidated_nw_idr,
+            "consolidated_net_worth_usd": round(consolidated_nw_idr / fx, 2),
+            "live_bank_cash_idr": accounts["total_liquid_idr"],
+            "total_liquid_reserves_idr": total_liquid_idr,
+            "avg_monthly_income_idr": cf["avg_monthly_income_idr"],
+            "avg_monthly_burn_idr": cf["avg_monthly_burn_idr"],
+            "savings_rate_pct": cf["overall_savings_rate_pct"],
+            "runway_months": runway["runway_months"],
+            "runway_health": runway["health"],
+            "runway_desc": runway["description"],
+            "top_spending_categories": cf["top_categories"][:5],
+        }
+
+    return {
+        "date": overview["date"],
+        "exchange_rate": fx,
+        "portfolio": overview,
+        "unified_summary": cashflow_info,
+    }
+
+
+def tool_get_rebalancing_plan(monthly_deposit_idr: float = 5_000_000.0) -> Dict[str, Any]:
+    """
+    Calculates a deposit-only rebalancing plan to allocate new cash across underweight
+    asset classes (Fixed Income, Equities, Crypto, Commodities) without selling existing assets.
+    """
+    from portfolio_app.ai_state_generator import calculate_rebalancing_orders
+    overview = tool_get_portfolio_overview()
+    if "error" in overview:
+        return overview
+
+    holdings = tool_get_holdings_breakdown()
+    total_assets_idr = overview["macro_metrics"]["total_assets_idr"]
+    fx = overview.get("exchange_rate_usd_idr") or get_exchange_rate()
+
+    plan = calculate_rebalancing_orders(
+        holdings=holdings,
+        total_assets_idr=total_assets_idr,
+        exchange_rate=fx,
+        monthly_deposit_idr=monthly_deposit_idr
+    )
+    return {
+        "date": overview["date"],
+        "exchange_rate": fx,
+        "rebalancing_plan": plan
+    }
+
+
+def tool_get_passive_income_projection() -> Dict[str, Any]:
+    """
+    Calculates projected annual and monthly passive cashflow from SBN coupons, stock dividends,
+    and crypto staking rewards, and compares against monthly living burn rate.
+    """
+    from portfolio_app.ai_state_generator import calculate_passive_income
+    from portfolio_app.cashflow_analyzer import resolve_sans_finance_db, get_cashflow_metrics
+
+    overview = tool_get_portfolio_overview()
+    if "error" in overview:
+        return overview
+
+    holdings = tool_get_holdings_breakdown()
+    fx = overview.get("exchange_rate_usd_idr") or get_exchange_rate()
+
+    monthly_burn = None
+    db_path = resolve_sans_finance_db(data_dir=get_data_dir(), auto_pull_gcs=False)
+    if db_path and db_path.exists():
+        try:
+            cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
+            monthly_burn = cf["avg_monthly_burn_idr"]
+        except Exception:
+            pass
+
+    projection = calculate_passive_income(holdings, fx, monthly_burn_idr=monthly_burn)
+    return {
+        "date": overview["date"],
+        "exchange_rate": fx,
+        "passive_income_projection": projection
+    }
+
+
+def tool_get_fire_simulation(
+    target_annual_spending_idr: Optional[float] = None,
+    expected_real_return_pct: float = 6.0,
+    safe_withdrawal_rate_pct: float = 4.0,
+    current_age: int = 30,
+    target_retirement_age: int = 55
+) -> Dict[str, Any]:
+    """
+    Simulates Financial Independence / Retire Early (FIRE) milestones, Coast FIRE,
+    and projected timeline using current net worth and cashflow burn rate.
+    """
+    from portfolio_app.ai_state_generator import calculate_fire_simulation
+    from portfolio_app.cashflow_analyzer import resolve_sans_finance_db, get_cashflow_metrics, get_live_accounts
+
+    overview = tool_get_portfolio_overview()
+    if "error" in overview:
+        return overview
+
+    fx = overview.get("exchange_rate_usd_idr") or get_exchange_rate()
+    net_worth = overview["macro_metrics"]["net_worth_idr"]
+    monthly_burn = 5_000_000.0
+    monthly_savings = 5_000_000.0
+
+    db_path = resolve_sans_finance_db(data_dir=get_data_dir(), auto_pull_gcs=False)
+    if db_path and db_path.exists():
+        try:
+            cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
+            accs = get_live_accounts(db_path, fx)
+            net_worth += accs["total_liquid_idr"]
+            monthly_burn = cf["avg_monthly_burn_idr"]
+            monthly_savings = cf["avg_monthly_savings_idr"]
+        except Exception:
+            pass
+
+    if target_annual_spending_idr and target_annual_spending_idr > 0:
+        monthly_burn = target_annual_spending_idr / 12.0
+
+    sim = calculate_fire_simulation(
+        net_worth_idr=net_worth,
+        monthly_burn_idr=monthly_burn,
+        monthly_savings_idr=monthly_savings,
+        expected_real_return_pct=expected_real_return_pct,
+        safe_withdrawal_rate_pct=safe_withdrawal_rate_pct,
+        current_age=current_age,
+        target_retirement_age=target_retirement_age
+    )
+
+    return {
+        "date": overview["date"],
+        "exchange_rate": fx,
+        "consolidated_net_worth_idr": net_worth,
+        "fire_simulation": sim
+    }
+
+
+def tool_get_tax_efficiency_audit() -> Dict[str, Any]:
+    """
+    Audits Indonesian tax treatment (PPh Final, Exemptions, Reinvestment benefits) across portfolio holdings.
+    """
+    from portfolio_app.ai_state_generator import calculate_tax_efficiency_audit
+    overview = tool_get_portfolio_overview()
+    if "error" in overview:
+        return overview
+
+    holdings = tool_get_holdings_breakdown()
+    fx = overview.get("exchange_rate_usd_idr") or get_exchange_rate()
+
+    audit = calculate_tax_efficiency_audit(holdings, fx)
+    return {
+        "date": overview["date"],
+        "exchange_rate": fx,
+        "tax_audit": audit
+    }
+
+
+def tool_get_scenario_stress_test() -> Dict[str, Any]:
+    """
+    Simulates macroeconomic crisis stress test (Market Crash, Currency Devaluation, Zero Income, Stagflation).
+    """
+    from portfolio_app.scenario_stress_tester import run_stress_test
+    from portfolio_app.cashflow_analyzer import resolve_sans_finance_db, get_cashflow_metrics, get_live_accounts
+
+    overview = tool_get_portfolio_overview()
+    if "error" in overview:
+        return overview
+
+    holdings = tool_get_holdings_breakdown()
+    fx = overview.get("exchange_rate_usd_idr") or get_exchange_rate()
+
+    live_cash = 0.0
+    monthly_burn = 4_000_000.0
+
+    db_path = resolve_sans_finance_db(data_dir=get_data_dir(), auto_pull_gcs=False)
+    if db_path and db_path.exists():
+        try:
+            cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
+            accs = get_live_accounts(db_path, fx)
+            live_cash = accs["total_liquid_idr"]
+            monthly_burn = cf["avg_monthly_burn_idr"]
+        except Exception:
+            pass
+
+    stress = run_stress_test(
+        holdings=holdings,
+        exchange_rate=fx,
+        live_bank_cash_idr=live_cash,
+        monthly_burn_idr=monthly_burn
+    )
+
+    return {
+        "date": overview["date"],
+        "exchange_rate": fx,
+        "stress_test": stress
+    }
 
 
 def tool_get_portfolio_health_audit() -> Dict[str, Any]:
@@ -191,6 +464,33 @@ def tool_get_portfolio_health_audit() -> Dict[str, Any]:
         recommendations.append(
             "Low USD/hard-currency exposure. Consider allocating 15-20% to USD assets (e.g. US Stocks or Stablecoins) to hedge against IDR inflation."
         )
+
+    # 4. Cashflow & Runway Audit (if DB available)
+    try:
+        from portfolio_app.cashflow_analyzer import (
+            resolve_sans_finance_db,
+            get_cashflow_metrics,
+            get_live_accounts,
+            calculate_runway,
+        )
+        db_path = resolve_sans_finance_db(data_dir=get_data_dir(), auto_pull_gcs=False)
+        if db_path and db_path.exists():
+            fx = overview.get("exchange_rate_usd_idr") or 16000.0
+            cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
+            accs = get_live_accounts(db_path, fx)
+            total_liquid = liq["liquid_cash_idr"] + accs["total_liquid_idr"]
+            runway = calculate_runway(total_liquid, cf["avg_monthly_burn_idr"])
+
+            if cf["overall_savings_rate_pct"] < 20.0:
+                recommendations.append(
+                    f"Savings rate is {cf['overall_savings_rate_pct']}%, below the healthy 20%+ target. Review top expense categories."
+                )
+            if runway["runway_months"] < 6.0:
+                recommendations.append(
+                    f"Liquid runway is {runway['runway_months']} months ({runway['health']}). Target at least 6 months of living expenses."
+                )
+    except Exception:
+        pass
 
     return {
         "status": "HEALTH_CHECK_COMPLETE",
@@ -245,6 +545,59 @@ TOOLS_SCHEMA = [
         "name": "get_portfolio_health_audit",
         "description": "Run an automated comprehensive financial health check: evaluates allocation drift, concentration risk, liquidity runway, and returns advisory recommendations.",
         "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "get_cashflow_analysis",
+        "description": "Get daily cashflow analysis from Sans Finance: monthly income, expenses, burn rate, savings rate, and category breakdowns.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "months": {"type": "integer", "description": "Number of months to analyze (default 3)"}
+            }
+        }
+    },
+    {
+        "name": "get_unified_financial_state",
+        "description": "Get complete 360° financial overview unifying investment portfolios with live bank balances, monthly burn rate, and liquid emergency runway.",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "get_rebalancing_plan",
+        "description": "Get a deposit-only rebalancing plan to allocate monthly investment cash across underweight asset classes without selling.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "monthly_deposit_idr": {"type": "number", "description": "New deposit amount in IDR to allocate (default 5,000,000)"}
+            }
+        }
+    },
+    {
+        "name": "get_passive_income_projection",
+        "description": "Get projected annual and monthly passive cashflow from SBN coupons, dividends, and crypto staking, compared with living burn rate.",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "get_fire_simulation",
+        "description": "Simulate Financial Independence / Retire Early (FIRE) milestones, Coast FIRE, and timeline.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "current_age": {"type": "integer", "description": "Current age (default 30)"},
+                "target_retirement_age": {"type": "integer", "description": "Target retirement age (default 55)"},
+                "expected_real_return_pct": {"type": "number", "description": "Expected real rate of return above inflation in % (default 6.0)"},
+                "safe_withdrawal_rate_pct": {"type": "number", "description": "Safe withdrawal rate in % (default 4.0)"}
+            }
+        }
+    },
+    {
+        "name": "get_tax_efficiency_audit",
+        "description": "Audits Indonesian tax treatment (PPh Final, Exemptions, Reinvestment benefits) across portfolio holdings.",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "get_scenario_stress_test",
+        "description": "Simulate macroeconomic crisis stress test (Market Crash, Currency Devaluation, Zero Income, Stagflation) on portfolio and cashflow.",
+        "inputSchema": {"type": "object", "properties": {}}
     }
 ]
 
@@ -293,6 +646,26 @@ def run_mcp_stdio_server():
                     result = tool_get_historical_performance(args.get("months", 6))
                 elif tool_name == "get_portfolio_health_audit":
                     result = tool_get_portfolio_health_audit()
+                elif tool_name == "get_cashflow_analysis":
+                    result = tool_get_cashflow_analysis(args.get("months", 3))
+                elif tool_name == "get_unified_financial_state":
+                    result = tool_get_unified_financial_state()
+                elif tool_name == "get_rebalancing_plan":
+                    result = tool_get_rebalancing_plan(args.get("monthly_deposit_idr", 5_000_000.0))
+                elif tool_name == "get_passive_income_projection":
+                    result = tool_get_passive_income_projection()
+                elif tool_name == "get_fire_simulation":
+                    result = tool_get_fire_simulation(
+                        target_annual_spending_idr=args.get("target_annual_spending_idr"),
+                        expected_real_return_pct=args.get("expected_real_return_pct", 6.0),
+                        safe_withdrawal_rate_pct=args.get("safe_withdrawal_rate_pct", 4.0),
+                        current_age=args.get("current_age", 30),
+                        target_retirement_age=args.get("target_retirement_age", 55)
+                    )
+                elif tool_name == "get_tax_efficiency_audit":
+                    result = tool_get_tax_efficiency_audit()
+                elif tool_name == "get_scenario_stress_test":
+                    result = tool_get_scenario_stress_test()
                 else:
                     resp = {
                         "jsonrpc": "2.0",
@@ -334,7 +707,18 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Portfolio MCP Server and AI Query CLI")
     parser.add_argument("--mcp", action="store_true", help="Run as stdio MCP JSON-RPC Server")
+    parser.add_argument("--dashboard", action="store_true", help="Launch executive visual terminal dashboard")
     parser.add_argument("--audit", action="store_true", help="Run and print portfolio health audit")
+    parser.add_argument("--unified", action="store_true", help="Print unified 360° financial state (portfolio + cashflow)")
+    parser.add_argument("--cashflow", action="store_true", help="Print cashflow analysis from Sans Finance")
+    parser.add_argument("--rebalance", action="store_true", help="Print deposit-only portfolio rebalancing plan")
+    parser.add_argument("--passive-income", action="store_true", help="Print projected passive income and FI coverage")
+    parser.add_argument("--fire", action="store_true", help="Print FIRE simulation and milestones")
+    parser.add_argument("--tax", action="store_true", help="Print tax efficiency audit")
+    parser.add_argument("--stress-test", action="store_true", help="Run macroeconomic crisis stress tests")
+    parser.add_argument("--prune", action="store_true", help="Prune historical snapshots to keep only the latest per month")
+    parser.add_argument("--apply-prune", action="store_true", help="Execute actual deletion during pruning")
+    parser.add_argument("--deposit", type=float, default=5_000_000.0, help="Monthly deposit amount in IDR for rebalancing")
     parser.add_argument("--digest", action="store_true", help="Print latest AI markdown digest")
     parser.add_argument("--json", action="store_true", help="Print latest AI state JSON")
     parser.add_argument("--overview", action="store_true", help="Print portfolio overview summary")
@@ -347,7 +731,38 @@ def main():
         run_mcp_stdio_server()
         return
 
-    if args.audit:
+    if args.dashboard:
+        from portfolio_app.dashboard import render_dashboard
+        render_dashboard()
+    elif args.prune:
+        from portfolio_app.snapshot_pruner import prune_local_files, prune_sqlite_snapshots
+        from portfolio_app.cashflow_analyzer import resolve_sans_finance_db
+        apply = args.apply_prune
+        data_dir = get_data_dir()
+        db_path = resolve_sans_finance_db(data_dir=data_dir, auto_pull_gcs=False)
+
+        res_files = prune_local_files(data_dir, apply=apply)
+        res_db = prune_sqlite_snapshots(db_path, apply=apply) if db_path else {}
+        print(json.dumps({
+            "mode": "APPLY" if apply else "DRY_RUN",
+            "local_files": res_files,
+            "sqlite_db": res_db
+        }, indent=2))
+    elif args.unified:
+        print(json.dumps(tool_get_unified_financial_state(), indent=2))
+    elif args.cashflow:
+        print(json.dumps(tool_get_cashflow_analysis(), indent=2))
+    elif args.rebalance:
+        print(json.dumps(tool_get_rebalancing_plan(monthly_deposit_idr=args.deposit), indent=2))
+    elif args.passive_income:
+        print(json.dumps(tool_get_passive_income_projection(), indent=2))
+    elif args.fire:
+        print(json.dumps(tool_get_fire_simulation(), indent=2))
+    elif args.tax:
+        print(json.dumps(tool_get_tax_efficiency_audit(), indent=2))
+    elif args.stress_test:
+        print(json.dumps(tool_get_scenario_stress_test(), indent=2))
+    elif args.audit:
         result = tool_get_portfolio_health_audit()
         print(json.dumps(result, indent=2))
     elif args.digest:
@@ -376,3 +791,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
