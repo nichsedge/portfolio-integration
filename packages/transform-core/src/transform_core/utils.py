@@ -4,9 +4,9 @@ Utility functions for portfolio data transformation.
 
 import os
 import re
-import requests
 from pathlib import Path
-from typing import Union
+
+import requests
 
 # Find the repo root (assumes this file is in packages/transform-core/src/transform_core/utils.py)
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -31,7 +31,7 @@ def get_data_dir() -> Path:
     return DATA_DIR_DEFAULT
 
 
-def parse_usd(value: Union[str, int, float, None]) -> float:
+def parse_usd(value: str | float | None) -> float:
     """
     Convert a USD string like '$123.45' or '472.16 USDC' to float, handle '<$0.01' and None.
 
@@ -60,13 +60,39 @@ def parse_usd(value: Union[str, int, float, None]) -> float:
     return 0.0
 
 
-def get_exchange_rate() -> float:
-    """Fetch latest USD to IDR exchange rate with fallback."""
+from .resilience import retry_with_backoff
+
+
+def _fetch_hexarate() -> float:
+    response = requests.get('https://hexarate.paikama.co/api/rates/USD/IDR/latest', timeout=8)
+    response.raise_for_status()
+    data = response.json()
+    return float(data['data']['mid'])
+
+
+def _fetch_open_er_api() -> float:
+    response = requests.get('https://open.er-api.com/v6/latest/USD', timeout=8)
+    response.raise_for_status()
+    data = response.json()
+    return float(data['rates']['IDR'])
+
+
+@retry_with_backoff(max_attempts=3, initial_delay=1.0, max_delay=5.0, retry_exceptions=(requests.RequestException,))
+def _fetch_rate_with_retry() -> float:
     try:
-        response = requests.get('https://hexarate.paikama.co/api/rates/USD/IDR/latest', timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        return float(data['data']['mid'])
+        return _fetch_hexarate()
+    except Exception:
+        return _fetch_open_er_api()
+
+
+def get_exchange_rate() -> float:
+    """Fetch latest USD to IDR exchange rate with resilient retries and multi-source fallbacks."""
+    try:
+        rate = _fetch_rate_with_retry()
+        if 10000.0 <= rate <= 30000.0:
+            return rate
+        print(f"Warning: Exchange rate {rate} out of reasonable range, using fallback 15500.0")
+        return 15500.0
     except Exception as e:
-        print(f"Error fetching exchange rate: {e}. Fallback to 15500.")
+        print(f"Error fetching exchange rate: {e}. Fallback to 15500.0.")
         return 15500.0

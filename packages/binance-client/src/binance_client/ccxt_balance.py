@@ -1,12 +1,13 @@
-import ccxt
 import json
 import os
 import socket
-import urllib.request
 import urllib.parse
+import urllib.request
+from pathlib import Path
+
+import ccxt
 import pendulum
 from dotenv import load_dotenv
-from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
@@ -58,6 +59,14 @@ def get_data_dir():
     return Path(data_dir)
 
 
+try:
+    from transform_core import retry_with_backoff
+except ImportError:
+    def retry_with_backoff(*args, **kwargs):
+        def dec(f): return f
+        return dec
+
+
 def get_binance_balance(api_key, secret):
     if not api_key or not secret:
         print("Skipping Binance: API keys not found.")
@@ -75,22 +84,33 @@ def get_binance_balance(api_key, secret):
 
         balances = {}
 
-        # 1. Fetch Spot Balance
+        # 1. Fetch Spot Balance with retry
+        @retry_with_backoff(max_attempts=3, initial_delay=1.0, retry_exceptions=(ccxt.NetworkError, ccxt.RateLimitExceeded))
+        def _fetch_spot():
+            return exchange.fetch_balance({"type": "spot"})
+
         try:
-            spot_balance = exchange.fetch_balance({"type": "spot"})
+            spot_balance = _fetch_spot()
             for symbol, total in spot_balance.get("total", {}).items():
                 if total > 0:
                     balances[symbol] = balances.get(symbol, 0) + total
-        except (socket.timeout, TimeoutError, ccxt.NetworkError) as e:
+        except (TimeoutError, ccxt.NetworkError) as e:
             print(
                 f"Warning: Binance spot balance timeout (may be blocked/unreachable): {e}"
             )
 
         # 2. Fetch Earn/Simple Earn Balance (Flexible & Locked)
-        # Note: CCXT uses 'sapi' for these Binance-specific endpoints
+        @retry_with_backoff(max_attempts=3, initial_delay=1.0, retry_exceptions=(ccxt.NetworkError, ccxt.RateLimitExceeded))
+        def _fetch_flexible():
+            return exchange.sapi_get_simple_earn_flexible_position()
+
+        @retry_with_backoff(max_attempts=3, initial_delay=1.0, retry_exceptions=(ccxt.NetworkError, ccxt.RateLimitExceeded))
+        def _fetch_locked():
+            return exchange.sapi_get_simple_earn_locked_position()
+
         try:
             # Flexible
-            flexible = exchange.sapi_get_simple_earn_flexible_position()
+            flexible = _fetch_flexible()
             for item in flexible.get("rows", []):
                 symbol = item["asset"]
                 total = float(item["totalAmount"])
@@ -98,19 +118,19 @@ def get_binance_balance(api_key, secret):
                     balances[symbol] = balances.get(symbol, 0) + total
 
             # Locked
-            locked = exchange.sapi_get_simple_earn_locked_position()
+            locked = _fetch_locked()
             for item in locked.get("rows", []):
                 symbol = item["asset"]
                 total = float(item["totalAmount"])
                 if total > 0:
                     balances[symbol] = balances.get(symbol, 0) + total
-        except (socket.timeout, TimeoutError, ccxt.NetworkError) as e:
+        except (TimeoutError, ccxt.NetworkError) as e:
             print(f"Note: Could not fetch Binance Earn balances (timeout/blocked): {e}")
         except Exception as e:
             print(f"Note: Could not fetch Binance Earn balances: {e}")
 
         return balances
-    except (socket.timeout, TimeoutError, ccxt.NetworkError) as e:
+    except (TimeoutError, ccxt.NetworkError) as e:
         print(f"Error: Binance connection timeout/unreachable (may be blocked): {e}")
         return {}
     except Exception as e:
@@ -135,7 +155,7 @@ def get_exchange_balance(exchange_id, api_key, secret):
         )
         balance = exchange.fetch_balance()
         return balance.get("total", {}) or {}
-    except (socket.timeout, TimeoutError, ccxt.NetworkError) as e:
+    except (TimeoutError, ccxt.NetworkError) as e:
         print(f"Error: {exchange_id} connection timeout/unreachable: {e}")
         return {}
     except Exception as e:
@@ -160,7 +180,7 @@ def get_prices_usd(symbols, exchange):
         for symbol_pair, ticker in tickers.items():
             base = symbol_pair.split("/")[0]
             prices[base] = float(ticker["last"])
-    except (socket.timeout, TimeoutError, ccxt.NetworkError):
+    except (TimeoutError, ccxt.NetworkError):
         print(
             "Warning: Price fetch timeout (may be blocked/unreachable), skipping price updates"
         )
@@ -171,7 +191,7 @@ def get_prices_usd(symbols, exchange):
             try:
                 ticker = exchange.fetch_ticker(f"{symbol}/USDT")
                 prices[symbol] = float(ticker["last"])
-            except (socket.timeout, TimeoutError, ccxt.NetworkError):
+            except (TimeoutError, ccxt.NetworkError):
                 continue
             except:
                 try:

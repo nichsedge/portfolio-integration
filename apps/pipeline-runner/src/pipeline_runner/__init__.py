@@ -192,6 +192,10 @@ def main():
         if alchemy_path.exists():
             processes["Alchemy"] = _start_non_blocking_step("Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"])
 
+        sansfinance_path = repo_root / "packages/sansfinance-client"
+        if sansfinance_path.exists():
+            processes["SansFinance"] = _start_non_blocking_step("SansFinance", str(sansfinance_path), ["uv", "run", "sansfinance-fetch"])
+
         fetch_results = _wait_for_steps(processes, timeout=args.timeout)
         failed_steps = [name for name, res in fetch_results.items() if res["returncode"] != 0]
 

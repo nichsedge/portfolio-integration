@@ -1,11 +1,28 @@
 """Alchemy Client - Fetch token holdings from Alchemy API."""
 
-import os
 import json
-import requests
-import pendulum
+import os
 from pathlib import Path
+
+import pendulum
+import requests
 from dotenv import load_dotenv
+
+try:
+    from transform_core import RateLimiter, retry_with_backoff
+except ImportError:
+    # Fallback dummy decorator
+    def retry_with_backoff(*args, **kwargs):
+        def dec(f): return f
+        return dec
+    RateLimiter = None
+
+
+@retry_with_backoff(max_attempts=3, initial_delay=1.5, max_delay=10.0, retry_exceptions=(requests.RequestException,))
+def _fetch_alchemy_tokens(url: str, payload: dict, headers: dict) -> dict:
+    response = requests.post(url, json=payload, headers=headers, timeout=20)
+    response.raise_for_status()
+    return response.json()
 
 
 def main(output_dir=None):
@@ -47,9 +64,7 @@ def main(output_dir=None):
     print(f"Fetching holdings for wallet: {wallet_address}")
 
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+        data = _fetch_alchemy_tokens(url, payload, headers)
     except requests.exceptions.RequestException as e:
         print(f"Error during API request: {e}")
         return

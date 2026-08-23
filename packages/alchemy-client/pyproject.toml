@@ -9,7 +9,11 @@ dependencies = [
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
     "pendulum>=3.0.0",
+    "transform-core",
 ]
+
+[tool.uv.sources]
+transform-core = { workspace = true }
 
 [project.scripts]
 alchemy-fetch = "alchemy_client:main"

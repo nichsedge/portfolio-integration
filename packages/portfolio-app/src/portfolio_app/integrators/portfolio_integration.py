@@ -417,9 +417,41 @@ def standardize_alchemy_data(alchemy_data: Dict[str, Any]) -> List[Dict[str, Any
     return standardized
 
 
+def standardize_sansfinance_data(sansfinance_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert Sans Finance app accounts (cash / P2P) to standardized format.
 
+    Portfolio holdings from the APK are intentionally skipped — they originate
+    from KSEI/DeBank/Binance/Alchemy in this pipeline and would double-count.
+    """
+    standardized = []
+    for acc in sansfinance_data.get("accounts", []):
+        balance = float(acc.get("balance") or 0)
+        currency = acc.get("currency", "IDR")
+        if abs(balance) < 1:
+            continue
 
+        # Negative cash (overdrawn wallet / credit balance) -> Liabilities with abs value
+        if balance < 0:
+            category, value = "Liabilities", -balance
+        else:
+            category = "P2P Lending" if acc["type"] == "P2P Lending" else (
+                "Digital Bank" if acc["type"] == "Cash" else "Bank Account"
+            )
+            value = balance
 
+        standardized.append({
+            "source": "SansFinance",
+            "category": category,
+            "asset": acc["name"],
+            "currency": currency,
+            "quantity": 0,
+            "price": 1.0,
+            "value_idr": None if currency != "IDR" else value,
+            "value_usd": None if currency == "IDR" else value,
+            "account": acc["name"],
+            "details": f"Type: {acc['type']}",
+        })
+    return standardized
 
 
 def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rate: float, output_path: Path):
@@ -585,6 +617,7 @@ def main():
     debank_raw_path = data_dir / f"{td}_raw_debank.json"
     binance_raw_path = data_dir / f"{td}_raw_binance.json"
     alchemy_curated_path = data_dir / f"{td}_curated_alchemy.json"
+    sansfinance_raw_path = data_dir / f"{td}_raw_sansfinance.json"
     
     output_json_path = data_dir / f"{td}_snapshot.json"
 
@@ -627,11 +660,21 @@ def main():
             alchemy_loaded = True
         except Exception as e: print(f"Error loading Alchemy: {e}")
 
+    sansfinance_loaded = False
+    sansfinance_standardized = []
+    if sansfinance_raw_path.exists():
+        try:
+            with open(sansfinance_raw_path, "r") as f:
+                sansfinance_standardized = standardize_sansfinance_data(json.load(f))
+            sansfinance_loaded = True
+        except Exception as e: print(f"Error loading SansFinance: {e}")
+
     all_data = (
         ksei_standardized
         + debank_standardized
         + binance_standardized
         + alchemy_standardized
+        + sansfinance_standardized
     )
 
     all_data.sort(key=lambda x: (str(x.get("category") or ""), str(x.get("source") or ""), str(x.get("asset") or "")))
@@ -691,6 +734,7 @@ def main():
     if debank_loaded: sources_info.append(f"EVM Wallet ({len(debank_standardized)} items)")
     if binance_loaded: sources_info.append(f"Binance ({len(binance_standardized)} items)")
     if alchemy_loaded: sources_info.append(f"SOL Wallet ({len(alchemy_standardized)} items)")
+    if sansfinance_loaded: sources_info.append(f"SansFinance ({len(sansfinance_standardized)} items)")
 
     print_rich_summary(td, all_data, exchange_rate, sources_info)
     print(f"Output files:\n  - JSON Snapshot: {output_json_path}")

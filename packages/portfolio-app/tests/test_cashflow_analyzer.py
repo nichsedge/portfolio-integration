@@ -3,13 +3,14 @@ Unit tests for Cashflow Analyzer (Sans Finance SQLite integration).
 """
 
 import sqlite3
-import pytest
-import pendulum
 from pathlib import Path
+
+import pendulum
+import pytest
 from portfolio_app.cashflow_analyzer import (
-    get_live_accounts,
-    get_cashflow_metrics,
     calculate_runway,
+    get_cashflow_metrics,
+    get_live_accounts,
 )
 
 

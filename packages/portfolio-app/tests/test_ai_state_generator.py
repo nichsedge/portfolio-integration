@@ -4,12 +4,12 @@ Unit tests for AI State and Digest Generator.
 
 import pytest
 from portfolio_app.ai_state_generator import (
+    calculate_fire_simulation,
     calculate_passive_income,
     calculate_rebalancing_orders,
-    calculate_fire_simulation,
     calculate_tax_efficiency_audit,
-    generate_ai_state,
     generate_ai_digest_markdown,
+    generate_ai_state,
 )
 
 

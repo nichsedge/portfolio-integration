@@ -70,4 +70,4 @@ packages/*/*.egg-info/
 packages/ksei-client/auth/
 
 # Claude Code
-.claude/
+.claude/.envrc

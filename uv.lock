@@ -17,6 +17,7 @@ members = [
     "pipeline-runner",
     "portfolio-app",
     "portfolio-integration",
+    "sansfinance-client",
     "transform-core",
 ]
 
@@ -162,6 +163,7 @@ dependencies = [
     { name = "pendulum" },
     { name = "python-dotenv" },
     { name = "requests" },
+    { name = "transform-core" },
 ]
 
 [package.metadata]
@@ -169,6 +171,7 @@ requires-dist = [
     { name = "pendulum", specifier = ">=3.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
+    { name = "transform-core", editable = "packages/transform-core" },
 ]
 
 [[package]]
@@ -210,6 +213,7 @@ dependencies = [
     { name = "ccxt" },
     { name = "pendulum" },
     { name = "python-dotenv" },
+    { name = "transform-core" },
 ]
 
 [package.metadata]
@@ -217,6 +221,7 @@ requires-dist = [
     { name = "ccxt", specifier = ">=4.0.0" },
     { name = "pendulum", specifier = ">=3.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "transform-core", editable = "packages/transform-core" },
 ]
 
 [[package]]
@@ -1617,6 +1622,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "pendulum" },
+    { name = "pydantic" },
     { name = "requests" },
     { name = "rich" },
     { name = "transform-core" },
@@ -1628,6 +1634,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "pandas", specifier = ">=2.3.1" },
     { name = "pendulum", specifier = ">=3.0.0" },
+    { name = "pydantic", specifier = ">=2.10.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "transform-core", editable = "packages/transform-core" },
@@ -1645,7 +1652,9 @@ dependencies = [
     { name = "pendulum" },
     { name = "pipeline-runner" },
     { name = "portfolio-app" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "sansfinance-client" },
     { name = "transform-core" },
 ]
 
@@ -1665,7 +1674,9 @@ requires-dist = [
     { name = "pendulum", specifier = ">=3.0.0" },
     { name = "pipeline-runner", editable = "apps/pipeline-runner" },
     { name = "portfolio-app", editable = "packages/portfolio-app" },
+    { name = "pydantic", specifier = ">=2.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "sansfinance-client", editable = "packages/sansfinance-client" },
     { name = "transform-core", editable = "packages/transform-core" },
 ]
 
@@ -2217,6 +2228,25 @@ wheels = [
 ]
 
 [[package]]
+name = "sansfinance-client"
+version = "0.1.0"
+source = { editable = "packages/sansfinance-client" }
+dependencies = [
+    { name = "pendulum" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+    { name = "transform-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pendulum", specifier = ">=3.0.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "requests", specifier = ">=2.31.0" },
+    { name = "transform-core", editable = "packages/transform-core" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2256,11 +2286,15 @@ name = "transform-core"
 version = "0.1.0"
 source = { editable = "packages/transform-core" }
 dependencies = [
+    { name = "pydantic" },
     { name = "requests" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "requests", specifier = ">=2.32.5" }]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.10.0" },
+    { name = "requests", specifier = ">=2.32.5" },
+]
 
 [[package]]
 name = "typing-extensions"

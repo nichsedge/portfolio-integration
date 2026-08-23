@@ -2,17 +2,13 @@
 Unit tests for MCP Server and JSON-RPC dispatching.
 """
 
-import json
-import pytest
 from portfolio_app.mcp_server import (
     TOOLS_SCHEMA,
-    tool_get_portfolio_overview,
-    tool_get_holdings_breakdown,
-    tool_get_rebalancing_plan,
-    tool_get_passive_income_projection,
     tool_get_fire_simulation,
-    tool_get_tax_efficiency_audit,
+    tool_get_passive_income_projection,
+    tool_get_rebalancing_plan,
     tool_get_scenario_stress_test,
+    tool_get_tax_efficiency_audit,
 )
 
 
