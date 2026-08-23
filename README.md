@@ -1,6 +1,6 @@
 # Portfolio Integration
 
-Unified financial portfolio ETL pipeline and Model Context Protocol (MCP) server aggregating assets from Indonesian securities (KSEI), EVM DeFi (DeBank), centralized crypto exchanges (Binance), Solana wallets (Alchemy), and manual tracking into standardized daily snapshots and AI-ready digests.
+Unified financial portfolio ETL pipeline and Model Context Protocol (MCP) server aggregating assets from Indonesian securities (KSEI), EVM DeFi (DeBank), centralized crypto exchanges (Binance), Solana wallets (Alchemy), and the Sans Finance app into standardized daily snapshots and AI-ready digests.
 
 ---
 
@@ -10,7 +10,7 @@ Unified financial portfolio ETL pipeline and Model Context Protocol (MCP) server
 - **DeBank** (`debank-scrape`): Multi-chain EVM wallet and DeFi protocol balances.
 - **Binance** (`binance-fetch`): Centralized cryptocurrency exchange balances via CCXT.
 - **Alchemy** (`alchemy-fetch`): Solana SPL token and native balance tracking via Alchemy RPC.
-- **Manual CSV** (`_manual_balances.csv`): Off-chain assets (bank accounts, cash, physical commodities).
+- **Sans Finance** (`sansfinance-fetch`): Bank cash, wallet cash, and P2P lending balances from the Sans Finance app DB (Cloudflare R2).
 
 ---
 
@@ -126,20 +126,19 @@ All data follows a standardized 4-stage pipeline:
 
 1. **Extract**: Raw output saved to `{YYYY-MM-DD}_raw_<source>.json`.
 2. **Transform**: Normalized and curated into `{YYYY-MM-DD}_curated_<source>.json`.
-3. **Integrate**: Merged with optional `_manual_balances.csv` into unified `{YYYY-MM-DD}_portfolio.csv` & `{YYYY-MM-DD}_snapshot.json`.
+3. **Integrate**: Merged into unified `{YYYY-MM-DD}_portfolio.csv` & `{YYYY-MM-DD}_snapshot.json`.
 4. **Cloud & AI Digest**: Uploaded to Google Cloud Storage (if configured) and rendered into `latest_ai_state.json` & `latest_ai_digest.md`.
 
 ---
 
-## Manual Asset Tracking
+## Sans Finance (Cash & P2P Accounts)
 
-For assets without API access (e.g. physical gold, savings accounts), create a `_manual_balances.csv` in your `PORTFOLIO_DATA_DIR`:
-
-```csv
-source,category,asset,currency,amount,value_idr,value_usd,account,details
-Manual,cash,BCA,IDR,5000000,5000000,,Checking,Savings Account
-Manual,precious_metal,Gold,IDR,10,13500000,,Safe,Physical 10g Bar
-```
+Off-chain cash and P2P lending balances are sourced from the Sans Finance Android
+app database via the `sansfinance-fetch` CLI (`packages/sansfinance-client/`),
+which downloads the latest SQLite snapshot from Cloudflare R2 and emits
+`{YYYY-MM-DD}_raw_sansfinance.json`. Portfolio holdings stored in the app are
+deliberately excluded — they originate from KSEI / DeBank / Binance / Alchemy in
+this same pipeline, so re-importing them would double-count.
 
 ---
 
