@@ -13,6 +13,7 @@ When updating, debugging, or fixing a specific component or data source:
   * **KSEI**: `uv run ksei dump`
   * **Binance**: `uv run binance-fetch`
   * **Alchemy**: `uv run alchemy-fetch`
+  * **SansFinance**: `uv run sansfinance-fetch`
   * **Individual Transformer**: Test only the specific transformer file (e.g. `python packages/portfolio-app/src/portfolio_app/transformers/debank_transform.py`)
 
 Running the full pipeline executes cloud uploads (GCS), triggers rate-limited APIs, and spawns unnecessary browser processes. Keep tests strictly scoped to the modified component.
@@ -28,6 +29,7 @@ This is a Python monorepo managed with `uv` implementing a 4-stage ETL pipeline 
    - **DeBank**: Standalone repository `github.com/nichsedge/debank-scraper` (CLI: `debank-scrape`)
    - **Binance**: `packages/binance-client` (CLI: `binance-fetch`)
    - **Alchemy**: `packages/alchemy-client` (CLI: `alchemy-fetch`)
+   - **SansFinance**: `packages/sansfinance-client` (CLI: `sansfinance-fetch`) — pulls cash & P2P accounts from the Sans Finance app DB on Cloudflare R2
 2. **Transform**: Clean and filter raw sources into curated JSON (`packages/portfolio-app/src/portfolio_app/transformers/`)
 3. **Integrate**: Merge curated sources into unified portfolio CSV and snapshot JSON (`packages/portfolio-app/src/portfolio_app/integrators/portfolio_integration.py`)
 4. **Cloud Upload & Insights**: Upload daily snapshots to GCS and generate AI state digests (`latest_ai_state.json` & `latest_ai_digest.md`).
@@ -63,6 +65,7 @@ uv run debank-scrape
 uv run ksei dump
 uv run binance-fetch
 uv run alchemy-fetch
+uv run sansfinance-fetch
 
 # Full pipeline options (Only run when explicitly requested)
 uv run run-all         # Full pipeline: fetch + transform + integrate + GCS upload
