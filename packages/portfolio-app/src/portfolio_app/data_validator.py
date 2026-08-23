@@ -13,22 +13,12 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
-# Allowed asset classes and categories
-VALID_ASSET_CLASSES = {
-    "Fixed Income",
-    "Equities",
-    "Cash & Equivalents",
-    "Crypto",
-    "Commodities",
-}
-
-VALID_CATEGORIES = {
-    "Bank Account", "Digital Bank", "Stablecoin", "Money Market Fund",
-    "SBN", "Corporate Bond", "P2P Lending",
-    "US Stocks", "Indo Stocks", "Equity Fund",
-    "Spot", "Staked", "Yield / LP",
-    "Gold", "Silver", "Liabilities"
-}
+from pydantic import ValidationError
+from transform_core.models import (
+    PortfolioHoldingRecord,
+    VALID_ASSET_CLASSES,
+    VALID_CATEGORIES,
+)
 
 
 class DataQualityError(Exception):
@@ -48,22 +38,23 @@ def validate_exchange_rate(rate: Optional[float]) -> List[str]:
 
 def validate_single_holding(holding: Dict[str, Any], idx: int, exchange_rate: float) -> Tuple[List[str], List[str]]:
     """
-    Validates a single holding item for schema, types, non-nulls, and mathematical sanity.
+    Validates a single holding item using Pydantic schemas and mathematical sanity checks.
     Returns (critical_errors, warnings).
     """
     errors = []
     warnings = []
-    prefix = f"Holding #{idx} ({holding.get('asset', 'Unknown')})"
+    asset_name = holding.get("asset", "Unknown")
+    prefix = f"Holding #{idx} ({asset_name})"
 
-    # Required string fields
-    asset = holding.get("asset")
-    if not asset or not isinstance(asset, str) or not asset.strip():
-        errors.append(f"{prefix}: 'asset' name is missing or empty")
+    # 1. Pydantic schema and type validation
+    try:
+        PortfolioHoldingRecord.model_validate(holding)
+    except ValidationError as e:
+        for err in e.errors():
+            loc = ".".join(str(l) for l in err["loc"])
+            errors.append(f"{prefix}: Field '{loc}' {err['msg']}")
 
-    source = holding.get("source")
-    if not source or not isinstance(source, str):
-        errors.append(f"{prefix}: 'source' is missing")
-
+    # 2. Strict category and asset class checks
     cat = holding.get("category")
     if not cat or cat not in VALID_CATEGORIES:
         warnings.append(f"{prefix}: Category '{cat}' is not in standard VALID_CATEGORIES")
@@ -72,29 +63,25 @@ def validate_single_holding(holding: Dict[str, Any], idx: int, exchange_rate: fl
     if not aclass or aclass not in VALID_ASSET_CLASSES:
         errors.append(f"{prefix}: Invalid asset_class '{aclass}'. Must be one of {VALID_ASSET_CLASSES}")
 
-    # Numeric fields
-    qty = holding.get("quantity")
-    if qty is None or math.isnan(qty) or qty < 0:
-        errors.append(f"{prefix}: Invalid quantity '{qty}'")
+    # 3. Numeric fields non-negative and finite checks
+    for num_field in ["quantity", "price", "value_idr", "value_usd"]:
+        val = holding.get(num_field)
+        if val is not None and (math.isnan(val) if isinstance(val, (int, float)) else False):
+            errors.append(f"{prefix}: Numeric field '{num_field}' is NaN")
 
-    price = holding.get("price")
-    if price is None or math.isnan(price) or price < 0:
-        errors.append(f"{prefix}: Invalid price '{price}'")
-
+    # 4. Math consistency check between IDR and USD
     val_idr = holding.get("value_idr")
-    if val_idr is None or math.isnan(val_idr) or val_idr < 0:
-        errors.append(f"{prefix}: Invalid value_idr '{val_idr}'")
-
     val_usd = holding.get("value_usd")
-    if val_usd is None or math.isnan(val_usd) or val_usd < 0:
-        errors.append(f"{prefix}: Invalid value_usd '{val_usd}'")
-
-    # Math consistency check between IDR and USD
     if val_idr is not None and val_usd is not None and exchange_rate > 0:
-        expected_idr = val_usd * exchange_rate
-        # Allow 5% tolerance for rounding / market rate diffs
-        if val_idr > 100000 and abs(val_idr - expected_idr) > (max(val_idr, expected_idr) * 0.10):
-            warnings.append(f"{prefix}: IDR value ({val_idr:,.0f}) and USD value ({val_usd:,.2f}) mismatch with FX {exchange_rate:,.2f}")
+        try:
+            val_idr_f = float(val_idr)
+            val_usd_f = float(val_usd)
+            expected_idr = val_usd_f * exchange_rate
+            # Allow 10% tolerance for rounding / market rate diffs
+            if val_idr_f > 100000 and abs(val_idr_f - expected_idr) > (max(val_idr_f, expected_idr) * 0.10):
+                warnings.append(f"{prefix}: IDR value ({val_idr_f:,.0f}) and USD value ({val_usd_f:,.2f}) mismatch with FX {exchange_rate:,.2f}")
+        except (ValueError, TypeError):
+            pass
 
     return errors, warnings
 

@@ -20,10 +20,12 @@ dependencies = [
     "binance-client",
     "alchemy-client",
     "transform-core",
+    "sansfinance-client",
     "ksei",
     "debank-scraper",
     "pendulum>=3.0.0",
     "python-dotenv>=1.0.0",
+    "pydantic>=2.10.0",
 ]
 
 [dependency-groups]
@@ -39,6 +41,7 @@ portfolio-app = { workspace = true }
 binance-client = { workspace = true }
 alchemy-client = { workspace = true }
 transform-core = { workspace = true }
+sansfinance-client = { workspace = true }
 ksei = { git = "https://github.com/nichsedge/ksei.git" }
 debank-scraper = { git = "https://github.com/nichsedge/debank-scraper.git" }
 
