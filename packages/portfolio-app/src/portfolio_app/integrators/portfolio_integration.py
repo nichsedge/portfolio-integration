@@ -491,8 +491,12 @@ def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rat
         asset_classes[aclass]["value_idr"] += val_idr
         asset_classes[aclass]["count"] += 1
 
-    net_worth_idr = total_assets_idr - total_liabilities_idr
-    
+    investments_data = [item for item in all_data if str(item.get("source", "")).lower() != "sansfinance"]
+    liquid_cash_accounts = [item for item in all_data if str(item.get("source", "")).lower() == "sansfinance"]
+
+    investments_idr = sum(item.get("value_idr", 0.0) for item in investments_data)
+    bank_cash_idr = sum(item.get("value_idr", 0.0) for item in liquid_cash_accounts)
+
     # Format for JSON
     snapshot = {
         "metadata": {
@@ -505,7 +509,11 @@ def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rat
             "net_worth_idr": round(net_worth_idr, 2),
             "net_worth_usd": round(net_worth_idr / exchange_rate, 2),
             "total_assets_idr": round(total_assets_idr, 2),
-            "total_liabilities_idr": round(total_liabilities_idr, 2)
+            "total_liabilities_idr": round(total_liabilities_idr, 2),
+            "investments_idr": round(investments_idr, 2),
+            "investments_usd": round(investments_idr / exchange_rate, 2),
+            "bank_cash_idr": round(bank_cash_idr, 2),
+            "bank_cash_usd": round(bank_cash_idr / exchange_rate, 2),
         },
         "allocation": {
             "by_category": [
@@ -527,7 +535,9 @@ def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rat
                 for k, v in sorted(asset_classes.items(), key=lambda x: x[1]["value_idr"], reverse=True)
             ]
         },
-        "holdings": all_data
+        "holdings": investments_data,
+        "liquid_cash_accounts": liquid_cash_accounts,
+        "all_holdings": all_data
     }
     
     with open(output_path, "w", encoding="utf-8") as f:

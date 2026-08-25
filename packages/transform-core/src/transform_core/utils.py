@@ -77,22 +77,46 @@ def _fetch_open_er_api() -> float:
     return float(data['rates']['IDR'])
 
 
+def _fetch_frankfurter() -> float:
+    response = requests.get('https://api.frankfurter.app/latest?from=USD&to=IDR', timeout=8)
+    response.raise_for_status()
+    data = response.json()
+    return float(data['rates']['IDR'])
+
+
 @retry_with_backoff(max_attempts=3, initial_delay=1.0, max_delay=5.0, retry_exceptions=(requests.RequestException,))
 def _fetch_rate_with_retry() -> float:
-    try:
-        return _fetch_hexarate()
-    except Exception:
-        return _fetch_open_er_api()
+    for fetcher in (_fetch_hexarate, _fetch_open_er_api, _fetch_frankfurter):
+        try:
+            return fetcher()
+        except Exception:
+            continue
+    raise RuntimeError("All FX rate providers failed")
 
 
 def get_exchange_rate() -> float:
     """Fetch latest USD to IDR exchange rate with resilient retries and multi-source fallbacks."""
+    cache_file = get_data_dir() / ".fx_rate_cache.json"
     try:
         rate = _fetch_rate_with_retry()
         if 10000.0 <= rate <= 30000.0:
+            try:
+                cache_file.write_text(json.dumps({"rate": rate, "timestamp": str(datetime.now())}))
+            except Exception:
+                pass
             return rate
-        print(f"Warning: Exchange rate {rate} out of reasonable range, using fallback 15500.0")
-        return 15500.0
     except Exception as e:
-        print(f"Error fetching exchange rate: {e}. Fallback to 15500.0.")
-        return 15500.0
+        print(f"Warning: Failed to fetch live FX rate ({e}). Attempting cache fallback...")
+
+    if cache_file.exists():
+        try:
+            cached = json.loads(cache_file.read_text())
+            cached_rate = float(cached.get("rate", 0))
+            if 10000.0 <= cached_rate <= 30000.0:
+                print(f"Using cached FX rate: {cached_rate}")
+                return cached_rate
+        except Exception:
+            pass
+
+    print("Warning: Using default fallback FX rate 15500.0")
+    return 15500.0

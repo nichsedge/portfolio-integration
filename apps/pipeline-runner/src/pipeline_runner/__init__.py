@@ -72,6 +72,8 @@ def _wait_for_steps(steps: Dict[str, subprocess.Popen[Any]], timeout: int = 180)
     results: Dict[str, Any] = {}
 
     for name, proc in steps.items():
+        if proc is None:
+            continue
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
             results[name] = {
@@ -141,6 +143,19 @@ def _attempt_fallback_cache(failed_sources: list[str], data_dir: Path, today: st
     return all_recovered
 
 
+def _is_indonesia_market_holiday(day) -> bool:
+    """True if `day` (date or 'YYYY-MM-DD' str) is an Indonesian public holiday."""
+    import datetime as _dt
+    if isinstance(day, str):
+        day = _dt.date.fromisoformat(day)
+    try:
+        import holidays as pyholidays
+        return day in pyholidays.country_holidays("ID", years=day.year)
+    except ImportError:
+        # Fallback: weekends only
+        return day.weekday() >= 5
+
+
 def main():
     parser = argparse.ArgumentParser(description="Portfolio Integration Pipeline")
     parser.add_argument("--fetch-only", action="store_true", help="Only fetch raw data")
@@ -176,10 +191,15 @@ def main():
     if not args.integrate and not args.backfill:
         print("--- Step 1: Fetch Raw Data ---")
         processes = {}
-        
-        processes["KSEI"] = _start_non_blocking_step(
-            "KSEI", str(repo_root), ["uv", "run", "ksei", "dump", "--output", str(data_dir)]
-        )
+
+        ksei_is_holiday = _is_indonesia_market_holiday(today)
+        if ksei_is_holiday:
+            print(f"🇮🇩 {today} is an Indonesian public holiday — KSEI market closed, skipping fetch (cache fallback will be used)")
+            processes["KSEI"] = None  # marker: skipped, not failed
+        else:
+            processes["KSEI"] = _start_non_blocking_step(
+                "KSEI", str(repo_root), ["uv", "run", "ksei", "dump", "--output", str(data_dir)]
+            )
         
         processes["DeBank"] = _start_non_blocking_step(
             "DeBank", str(repo_root), ["uv", "run", "debank-scrape", "--output", str(data_dir)]
@@ -197,7 +217,13 @@ def main():
             processes["SansFinance"] = _start_non_blocking_step("SansFinance", str(sansfinance_path), ["uv", "run", "sansfinance-fetch"])
 
         fetch_results = _wait_for_steps(processes, timeout=args.timeout)
+        fetch_results = {k: v for k, v in fetch_results.items() if v is not None}
         failed_steps = [name for name, res in fetch_results.items() if res["returncode"] != 0]
+
+        # On Indonesian holidays KSEI is closed: treat as a failed step so the
+        # cache fallback copies the last good raw KSEI file for today's date.
+        if ksei_is_holiday:
+            failed_steps.append("KSEI")
 
         if failed_steps:
             if args.fallback_cached:
@@ -251,23 +277,23 @@ def main():
                 
             # Set verbose=True for integration to show the rich summary
             if _run_blocking_step("Integration", str(integrator_path.parent), integrate_cmd, verbose=True):
-                # Upload to GCS if configured
+                # Upload to Cloud (Cloudflare R2 & GCS) if configured
                 try:
                     sys.path.insert(0, str(portfolio_app_path / "src"))
-                    from portfolio_app.gcs_uploader import upload_to_gcs
+                    from portfolio_app.cloud_uploader import upload_to_cloud
                     
                     output_json_path = data_dir / f"{current_date}_snapshot.json"
                     output_ai_state_path = data_dir / f"{current_date}_ai_state.json"
                     output_ai_digest_path = data_dir / f"{current_date}_ai_digest.md"
                     
-                    print(f"\n--- Step 3.5: GCS Upload ({current_date}) ---")
-                    upload_to_gcs(output_json_path)
+                    print(f"\n--- Step 3.5: Cloud Upload ({current_date}) ---")
+                    upload_to_cloud(output_json_path)
                     if output_ai_state_path.exists():
-                        upload_to_gcs(output_ai_state_path)
+                        upload_to_cloud(output_ai_state_path)
                     if output_ai_digest_path.exists():
-                        upload_to_gcs(output_ai_digest_path)
+                        upload_to_cloud(output_ai_digest_path)
                 except Exception as e:
-                    print(f"⚠️ GCS upload failed: {e}")
+                    print(f"⚠️ Cloud upload failed: {e}")
 
         print("\n--- Step 4: Generate Insights ---")
         insights_path = portfolio_app_path / "src/portfolio_app/generate_insights.py"

@@ -219,12 +219,19 @@ def tool_get_unified_financial_state() -> Dict[str, Any]:
     if db_path and db_path.exists():
         accounts = get_live_accounts(db_path, fx)
         cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
+        
+        has_sansfinance = "SansFinance" in overview.get("sources", []) or "sansfinance" in overview.get("sources", [])
         portfolio_cash = overview["liquidity"]["liquid_cash_idr"]
-        total_liquid_idr = portfolio_cash + accounts["total_liquid_idr"]
-        runway = calculate_runway(total_liquid_idr, cf["avg_monthly_burn_idr"])
-
         portfolio_nw = overview["macro_metrics"]["net_worth_idr"]
-        consolidated_nw_idr = portfolio_nw + accounts["total_liquid_idr"]
+
+        if has_sansfinance:
+            total_liquid_idr = portfolio_cash
+            consolidated_nw_idr = portfolio_nw
+        else:
+            total_liquid_idr = portfolio_cash + accounts["total_liquid_idr"]
+            consolidated_nw_idr = portfolio_nw + accounts["total_liquid_idr"]
+
+        runway = calculate_runway(total_liquid_idr, cf["avg_monthly_burn_idr"])
 
         cashflow_info = {
             "sans_finance_db": str(db_path.name),
@@ -336,7 +343,9 @@ def tool_get_fire_simulation(
         try:
             cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
             accs = get_live_accounts(db_path, fx)
-            net_worth += accs["total_liquid_idr"]
+            has_sansfinance = "SansFinance" in overview.get("sources", []) or "sansfinance" in overview.get("sources", [])
+            if not has_sansfinance:
+                net_worth += accs["total_liquid_idr"]
             monthly_burn = cf["avg_monthly_burn_idr"]
             monthly_savings = cf["avg_monthly_savings_idr"]
         except Exception:
@@ -405,7 +414,9 @@ def tool_get_scenario_stress_test() -> Dict[str, Any]:
         try:
             cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
             accs = get_live_accounts(db_path, fx)
-            live_cash = accs["total_liquid_idr"]
+            has_sansfinance = "SansFinance" in overview.get("sources", []) or "sansfinance" in overview.get("sources", [])
+            if not has_sansfinance:
+                live_cash = accs["total_liquid_idr"]
             monthly_burn = cf["avg_monthly_burn_idr"]
         except Exception:
             pass
@@ -441,17 +452,43 @@ def tool_get_portfolio_health_audit() -> Dict[str, Any]:
     recommendations = []
     
     # 1. Allocation Drift Audit
+    drift_alerts = []
     for a in allocations:
         drift = a.get("drift_pct", 0.0)
         aclass = a["asset_class"]
-        if drift > 10.0:
-            recommendations.append(
-                f"Overweight in {aclass} ({a['weight_pct']:.1f}% vs {a['target_pct']:.1f}% target). Consider trimming or directing new monthly contributions elsewhere."
-            )
-        elif drift < -5.0:
-            recommendations.append(
-                f"Underweight in {aclass} ({a['weight_pct']:.1f}% vs {a['target_pct']:.1f}% target). Recommended to accumulate {aclass}."
-            )
+        target = a.get("target_pct", 0.0)
+        if drift >= 5.0:
+            msg = f"OVERWEIGHT: {aclass} is +{drift:.1f}% above target ({a['weight_pct']:.1f}% vs {target:.1f}%). Pause additions or reallocate monthly DCA."
+            recommendations.append(msg)
+            drift_alerts.append({"asset_class": aclass, "severity": "HIGH", "message": msg})
+        elif drift <= -5.0:
+            msg = f"UNDERWEIGHT: {aclass} is {drift:.1f}% below target ({a['weight_pct']:.1f}% vs {target:.1f}%). Priority candidate for new DCA deposits."
+            recommendations.append(msg)
+            drift_alerts.append({"asset_class": aclass, "severity": "HIGH", "message": msg})
+        elif abs(drift) >= 3.0:
+            drift_alerts.append({"asset_class": aclass, "severity": "MEDIUM", "message": f"Moderate drift: {aclass} ({drift:+.1f}%)"})
+
+    # 1.5. SBN Maturity & Reinvestment Audit
+    sbn_maturity_alerts = []
+    try:
+        from portfolio_app.ai_state_generator import calculate_sukuk_and_dividend_schedule
+        holdings = tool_get_holdings_breakdown()
+        fx_rate = overview.get("exchange_rate_usd_idr") or 16000.0
+        sukuk_data = calculate_sukuk_and_dividend_schedule(holdings, fx_rate, current_date_str=overview.get("date", ""))
+        for item in sukuk_data.get("schedule", []):
+            m_left = item.get("months_to_maturity", 999)
+            if m_left <= 6.0:
+                mat_msg = f"SBN Maturity Approaching: {item['asset']} (Rp {item['principal_idr']:,.0f}) matures in {m_left} months ({item['maturity_date']}). Plan reinvestment."
+                recommendations.append(mat_msg)
+                sbn_maturity_alerts.append({
+                    "asset": item["asset"],
+                    "principal_idr": item["principal_idr"],
+                    "maturity_date": item["maturity_date"],
+                    "months_left": m_left,
+                    "alert": mat_msg
+                })
+    except Exception:
+        pass
 
     # 2. Liquidity Audit
     if liq["liquid_cash_pct"] < 8.0:
@@ -478,7 +515,8 @@ def tool_get_portfolio_health_audit() -> Dict[str, Any]:
             fx = overview.get("exchange_rate_usd_idr") or 16000.0
             cf = get_cashflow_metrics(db_path, months=3, exchange_rate=fx)
             accs = get_live_accounts(db_path, fx)
-            total_liquid = liq["liquid_cash_idr"] + accs["total_liquid_idr"]
+            has_sansfinance = "SansFinance" in overview.get("sources", []) or "sansfinance" in overview.get("sources", [])
+            total_liquid = liq["liquid_cash_idr"] if has_sansfinance else (liq["liquid_cash_idr"] + accs["total_liquid_idr"])
             runway = calculate_runway(total_liquid, cf["avg_monthly_burn_idr"])
 
             if cf["overall_savings_rate_pct"] < 20.0:
@@ -503,7 +541,29 @@ def tool_get_portfolio_health_audit() -> Dict[str, Any]:
             {"asset_class": a["asset_class"], "drift": f"{a['drift_pct']:+0.1f}%"}
             for a in allocations if abs(a["drift_pct"]) >= 2.0
         ],
+        "drift_alerts": drift_alerts,
+        "sbn_maturity_alerts": sbn_maturity_alerts,
         "advisory_recommendations": recommendations,
+    }
+
+
+def tool_get_upcoming_cashflow() -> Dict[str, Any]:
+    """
+    Get schedule of upcoming fixed-income cashflow: monthly Sukuk SBN coupon payouts (paid on the 10th of every month).
+    """
+    from portfolio_app.ai_state_generator import calculate_sukuk_and_dividend_schedule
+    overview = tool_get_portfolio_overview()
+    if "error" in overview:
+        return overview
+
+    holdings = tool_get_holdings_breakdown()
+    fx = overview.get("exchange_rate_usd_idr") or get_exchange_rate()
+
+    schedule = calculate_sukuk_and_dividend_schedule(holdings, fx, current_date_str=overview.get("date", ""))
+    return {
+        "date": overview["date"],
+        "exchange_rate": fx,
+        "upcoming_cashflow": schedule
     }
 
 
@@ -595,6 +655,11 @@ TOOLS_SCHEMA = [
         "inputSchema": {"type": "object", "properties": {}}
     },
     {
+        "name": "get_upcoming_cashflow",
+        "description": "Get schedule of upcoming fixed-income cashflow: monthly Sukuk SBN coupon payouts (paid on the 10th of each month).",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
         "name": "get_scenario_stress_test",
         "description": "Simulate macroeconomic crisis stress test (Market Crash, Currency Devaluation, Zero Income, Stagflation) on portfolio and cashflow.",
         "inputSchema": {"type": "object", "properties": {}}
@@ -654,6 +719,8 @@ def run_mcp_stdio_server():
                     result = tool_get_rebalancing_plan(args.get("monthly_deposit_idr", 5_000_000.0))
                 elif tool_name == "get_passive_income_projection":
                     result = tool_get_passive_income_projection()
+                elif tool_name == "get_upcoming_cashflow":
+                    result = tool_get_upcoming_cashflow()
                 elif tool_name == "get_fire_simulation":
                     result = tool_get_fire_simulation(
                         target_annual_spending_idr=args.get("target_annual_spending_idr"),
