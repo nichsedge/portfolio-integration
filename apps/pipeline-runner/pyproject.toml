@@ -3,13 +3,13 @@ name = "pipeline-runner"
 version = "0.1.0"
 description = "Pipeline runner for portfolio integration"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.7"
 license = { text = "MIT" }
 dependencies = [
     "portfolio-app",
     "ksei",
     "debank-scraper",
-    "python-dotenv>=1.0.0",
+    "python-dotenv>=1.2.3",
 ]
 
 [tool.uv.sources]
@@ -23,5 +23,5 @@ fetch-only = "pipeline_runner:fetch_entrypoint"
 integrate-only = "pipeline_runner:integrate_entrypoint"
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.12.0"]
+requires = ["uv_build>=0.12.5,<0.12.6"]
 build-backend = "uv_build"
