@@ -3,7 +3,7 @@ name = "portfolio_app"
 version = "0.1.0"
 description = "Portfolio data integration and transformation"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.7"
 license = {text = "MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -14,14 +14,14 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "pendulum>=3.0.0",
-    "pandas>=2.3.1",
-    "requests>=2.31.0",
-    "matplotlib>=3.10.8",
+    "pendulum>=3.2.0",
+    "pandas>=2.3.3",
+    "requests>=2.34.2",
+    "matplotlib>=3.11.1",
     "transform-core",
     "rich>=15.0.0",
-    "google-cloud-storage>=2.14.0",
-    "pydantic>=2.10.0",
+    "google-cloud-storage>=2.19.0",
+    "pydantic>=2.13.4",
 ]
 
 [project.scripts]
@@ -31,7 +31,7 @@ portfolio-dashboard = "portfolio_app.dashboard:main"
 portfolio-compact = "portfolio_app.snapshot_compactor:main"
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.12.0"]
+requires = ["uv_build>=0.12.5,<0.12.6"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
