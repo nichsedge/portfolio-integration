@@ -33,6 +33,18 @@ def get_gcs_storage_client():
     return storage.Client()
 
 
+def pull_sans_finance_db_from_r2(target_path: Path) -> bool:
+    """Pulls the latest Sans Finance SQLite snapshot from Cloudflare R2."""
+    try:
+        from sansfinance_client.fetcher import download_db
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        download_db(target_path)
+        return target_path.exists() and target_path.stat().st_size > 0
+    except Exception as e:
+        print(f"⚠️ Warning: Could not pull Sans Finance DB from R2: {e}")
+        return False
+
+
 def pull_sans_finance_db_from_gcs(target_path: Path, bucket_name: Optional[str] = None) -> bool:
     """Pulls the latest Sans Finance SQLite snapshot from GCS."""
     if not bucket_name:
@@ -54,7 +66,7 @@ def pull_sans_finance_db_from_gcs(target_path: Path, bucket_name: Optional[str] 
 
 
 def resolve_sans_finance_db(data_dir: Optional[Path] = None, auto_pull_gcs: bool = True) -> Optional[Path]:
-    """Finds the Sans Finance SQLite database locally or pulls it from GCS."""
+    """Finds the Sans Finance SQLite database locally or pulls it from R2 / GCS."""
     if data_dir is None:
         data_dir = get_data_dir()
 
@@ -74,9 +86,11 @@ def resolve_sans_finance_db(data_dir: Optional[Path] = None, auto_pull_gcs: bool
         if c.exists():
             return c
 
-    # 3. Pull from GCS if enabled
+    # 3. Pull from Cloud (R2 first, then GCS) if enabled
     if auto_pull_gcs:
         target_path = data_dir / "sans_finance_latest.sqlite"
+        if pull_sans_finance_db_from_r2(target_path):
+            return target_path
         if pull_sans_finance_db_from_gcs(target_path):
             return target_path
 

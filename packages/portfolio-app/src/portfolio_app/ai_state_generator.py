@@ -111,6 +111,160 @@ def calculate_passive_income(
     }
 
 
+def calculate_sukuk_and_dividend_schedule(
+    holdings: List[Dict[str, Any]],
+    exchange_rate: float,
+    current_date_str: str = ""
+) -> Dict[str, Any]:
+    """
+    Computes upcoming monthly coupon schedule and maturity horizon for SBN Sukuk / Corporate Bonds.
+    SBN Sukuk (ST010, ST012, ST013, ST014, etc.) pays fixed/floating coupons monthly on the 10th.
+    """
+    SUKUK_METADATA = {
+        "ST010T4": {"rate": 0.0640, "maturity": "2027-05-10", "type": "Sukuk Tabungan 4-Yr"},
+        "ST012T4": {"rate": 0.0655, "maturity": "2028-05-10", "type": "Sukuk Tabungan 4-Yr"},
+        "ST013T2": {"rate": 0.0640, "maturity": "2026-11-10", "type": "Sukuk Tabungan 2-Yr"},
+        "ST014T2": {"rate": 0.0640, "maturity": "2027-05-10", "type": "Sukuk Tabungan 2-Yr"},
+        "DX002ETCD0BN0101": {"rate": 0.0625, "maturity": "2026-12-15", "type": "Corporate Bond / Sukuk"}
+    }
+
+    from datetime import datetime
+    today = datetime.strptime(current_date_str, "%Y-%m-%d") if current_date_str else datetime.now()
+
+    items = []
+    total_net_monthly_idr = 0.0
+    total_gross_monthly_idr = 0.0
+    total_principal_idr = 0.0
+    maturity_horizon = []
+
+    for h in holdings:
+        asset = str(h.get("asset", ""))
+        val_idr = h.get("value_idr") or 0.0
+        if val_idr <= 0:
+            val_idr = (h.get("value_usd") or 0.0) * exchange_rate
+
+        category = str(h.get("category", ""))
+        if "SBN" in category or "Bond" in category or "Sukuk" in asset:
+            matched_rate = 0.0625
+            matched_maturity = "2027-12-31"
+            bond_type = "Fixed Income Bond"
+
+            for code, meta in SUKUK_METADATA.items():
+                if code in asset:
+                    matched_rate = meta["rate"]
+                    matched_maturity = meta["maturity"]
+                    bond_type = meta["type"]
+                    break
+            
+            gross_monthly = (val_idr * matched_rate) / 12.0
+            tax_rate = 0.10  # 10% PPh Final for domestic SBN
+            net_monthly = gross_monthly * (1.0 - tax_rate)
+
+            try:
+                mat_date = datetime.strptime(matched_maturity, "%Y-%m-%d")
+                days_left = max(0, (mat_date - today).days)
+                months_left = round(days_left / 30.44, 1)
+            except Exception:
+                days_left = 365
+                months_left = 12.0
+
+            item = {
+                "asset": asset,
+                "bond_type": bond_type,
+                "category": category or "SBN",
+                "frequency": "Monthly (Every 10th)",
+                "payout_day": 10,
+                "annual_coupon_pct": round(matched_rate * 100, 2),
+                "principal_idr": round(val_idr, 0),
+                "gross_monthly_idr": round(gross_monthly, 0),
+                "net_monthly_idr": round(net_monthly, 0),
+                "net_monthly_usd": round(net_monthly / exchange_rate, 2),
+                "maturity_date": matched_maturity,
+                "days_to_maturity": days_left,
+                "months_to_maturity": months_left,
+            }
+            items.append(item)
+            maturity_horizon.append({
+                "asset": asset,
+                "maturity_date": matched_maturity,
+                "principal_return_idr": round(val_idr, 0),
+                "months_left": months_left,
+                "year": matched_maturity.split("-")[0]
+            })
+
+            total_principal_idr += val_idr
+            total_gross_monthly_idr += gross_monthly
+            total_net_monthly_idr += net_monthly
+
+    items.sort(key=lambda x: x["principal_idr"], reverse=True)
+    maturity_horizon.sort(key=lambda x: x["maturity_date"])
+
+    by_year = {}
+    for mh in maturity_horizon:
+        yr = mh["year"]
+        by_year[yr] = by_year.get(yr, 0.0) + mh["principal_return_idr"]
+
+    return {
+        "total_principal_idr": round(total_principal_idr, 0),
+        "total_gross_monthly_idr": round(total_gross_monthly_idr, 0),
+        "total_net_monthly_idr": round(total_net_monthly_idr, 0),
+        "total_net_monthly_usd": round(total_net_monthly_idr / exchange_rate, 2) if exchange_rate > 0 else 0.0,
+        "schedule": items,
+        "maturity_horizon": maturity_horizon,
+        "principal_return_by_year": by_year
+    }
+
+
+def calculate_attribution_analysis(
+    current_snapshot: Dict[str, Any],
+    all_snapshots: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """
+    Calculates period-over-period net worth growth attribution,
+    separating market appreciation from cash/savings changes.
+    """
+    if not all_snapshots or len(all_snapshots) < 2:
+        return {"has_history": False}
+
+    current_date = current_snapshot.get("metadata", {}).get("date", "")
+    current_totals = current_snapshot.get("totals", {})
+    current_nw = current_totals.get("net_worth_idr", 0.0)
+    current_investments = current_totals.get("investments_idr", 0.0)
+    current_cash = current_totals.get("bank_cash_idr", 0.0)
+
+    sorted_snaps = sorted(
+        [s for s in all_snapshots if s.get("metadata", {}).get("date", "") < current_date],
+        key=lambda s: s.get("metadata", {}).get("date", "")
+    )
+    if not sorted_snaps:
+        return {"has_history": False}
+
+    baseline_snap = sorted_snaps[0]
+    baseline_date = baseline_snap.get("metadata", {}).get("date", "")
+    base_totals = baseline_snap.get("totals", {})
+    base_nw = base_totals.get("net_worth_idr", 0.0)
+    base_investments = base_totals.get("investments_idr", 0.0)
+    base_cash = base_totals.get("bank_cash_idr", 0.0)
+
+    nw_delta_idr = current_nw - base_nw
+    nw_delta_pct = round((nw_delta_idr / base_nw * 100), 2) if base_nw > 0 else 0.0
+    investments_delta_idr = current_investments - base_investments
+    cash_delta_idr = current_cash - base_cash
+
+    return {
+        "has_history": True,
+        "period_start": baseline_date,
+        "period_end": current_date,
+        "net_worth_start_idr": round(base_nw, 0),
+        "net_worth_end_idr": round(current_nw, 0),
+        "net_worth_delta_idr": round(nw_delta_idr, 0),
+        "net_worth_delta_pct": nw_delta_pct,
+        "investments_delta_idr": round(investments_delta_idr, 0),
+        "bank_cash_delta_idr": round(cash_delta_idr, 0),
+        "market_vs_cash_commentary": f"{'Grew' if nw_delta_idr >= 0 else 'Decreased'} by Rp {abs(nw_delta_idr):,.0f} ({nw_delta_pct:+.1f}%) over period."
+    }
+
+
 def calculate_rebalancing_orders(
     holdings: List[Dict[str, Any]],
     total_assets_idr: float,
@@ -493,6 +647,15 @@ def generate_ai_state(
     if liquid_cash_pct < 5.0:
         alerts.append(f"Low liquid cash reserve: {liquid_cash_pct}% (recommended >= 10% for liquidity buffer)")
 
+    # Asset Allocation Drift Alerts (>= 5% threshold)
+    for item in asset_allocation:
+        aclass = item["asset_class"]
+        drift = item["drift_pct"]
+        target = item["target_pct"]
+        if abs(drift) >= 5.0 and target > 0:
+            dir_label = "overweight" if drift > 0 else "underweight"
+            alerts.append(f"Allocation Drift: {aclass} is {abs(drift):.1f}% {dir_label} (Current: {item['weight_pct']:.1f}%, Target: {target:.1f}%)")
+
     # 6. Dense Top Holdings (>= 1.5% weight)
     top_holdings_dense = []
     for h in sorted_holdings:
@@ -547,7 +710,18 @@ def generate_ai_state(
         if db_path and db_path.exists():
             accounts_data = get_live_accounts(db_path, exchange_rate)
             cashflow_data = get_cashflow_metrics(db_path, months=3, exchange_rate=exchange_rate)
-            total_liquid_idr = liquid_cash_val + accounts_data["total_liquid_idr"]
+            
+            # Prevent double counting if snapshot already integrated Sans Finance cash accounts
+            has_sansfinance = any(h.get("source", "").lower() == "sansfinance" for h in holdings)
+            if has_sansfinance:
+                consolidated_nw_idr = round(net_worth_idr, 2)
+                consolidated_nw_usd = round(net_worth_usd, 2)
+                total_liquid_idr = liquid_cash_val
+            else:
+                consolidated_nw_idr = round(net_worth_idr + accounts_data["total_liquid_idr"], 2)
+                consolidated_nw_usd = round(net_worth_usd + accounts_data["total_liquid_usd"], 2)
+                total_liquid_idr = liquid_cash_val + accounts_data["total_liquid_idr"]
+
             runway_data = calculate_runway(total_liquid_idr, cashflow_data["avg_monthly_burn_idr"])
             monthly_burn_for_fi = cashflow_data["avg_monthly_burn_idr"]
 
@@ -555,8 +729,8 @@ def generate_ai_state(
                 "db_source": str(db_path.name),
                 "live_bank_cash_idr": accounts_data["total_liquid_idr"],
                 "live_bank_cash_usd": accounts_data["total_liquid_usd"],
-                "consolidated_net_worth_idr": round(net_worth_idr + accounts_data["total_liquid_idr"], 2),
-                "consolidated_net_worth_usd": round(net_worth_usd + accounts_data["total_liquid_usd"], 2),
+                "consolidated_net_worth_idr": consolidated_nw_idr,
+                "consolidated_net_worth_usd": consolidated_nw_usd,
                 "monthly_income_idr": cashflow_data["avg_monthly_income_idr"],
                 "monthly_burn_idr": cashflow_data["avg_monthly_burn_idr"],
                 "monthly_savings_idr": cashflow_data["avg_monthly_savings_idr"],
@@ -570,6 +744,15 @@ def generate_ai_state(
 
     # 9. Passive Income & Yield Projections
     passive_income = calculate_passive_income(holdings, exchange_rate, monthly_burn_idr=monthly_burn_for_fi)
+    sukuk_schedule = calculate_sukuk_and_dividend_schedule(holdings, exchange_rate, current_date_str=date)
+    attribution_analysis = calculate_attribution_analysis(current_snapshot, all_snapshots)
+
+    # SBN Maturity Alerts (within <= 6 months)
+    for item in sukuk_schedule.get("schedule", []):
+        months_left = item.get("months_to_maturity", 999)
+        mat_date = item.get("maturity_date", "")
+        if months_left <= 6.0 and mat_date:
+            alerts.append(f"SBN Maturity Alert: {item['asset']} (Rp {item['principal_idr']:,.0f}) matures in {months_left} months on {mat_date}. Prepare reinvestment plan.")
 
     # 10. Deposit-Only Rebalancing Plan
     rebalancing_plan = calculate_rebalancing_orders(
@@ -600,6 +783,8 @@ def generate_ai_state(
             "liquid_cash_pct": liquid_cash_pct,
         },
         "passive_income": passive_income,
+        "sukuk_and_coupon_schedule": sukuk_schedule,
+        "attribution_analysis": attribution_analysis,
         "rebalancing_plan": rebalancing_plan,
         "risk_and_alerts": {
             "crypto_exposure_pct": crypto_pct,
@@ -631,6 +816,12 @@ def generate_ai_digest_markdown(ai_state: Dict[str, Any]) -> str:
     if metrics["total_liabilities_idr"] > 0:
         md.append(f"- **Total Liabilities**: Rp {metrics['total_liabilities_idr']:,.0f}")
     md.append(f"- **Liquid Cash Reserve**: Rp {ai_state['liquidity']['liquid_cash_idr']:,.0f} ({ai_state['liquidity']['liquid_cash_pct']}% of portfolio)")
+
+    if ai_state.get("attribution_analysis") and ai_state["attribution_analysis"].get("has_history"):
+        attr = ai_state["attribution_analysis"]
+        md.append(f"- **Period Attribution ({attr['period_start']} → {attr['period_end']})**: {attr['market_vs_cash_commentary']}")
+        md.append(f"  - *Investments Delta*: Rp {attr['investments_delta_idr']:+,.0f}")
+        md.append(f"  - *Bank Cash Delta*: Rp {attr['bank_cash_delta_idr']:+,.0f}")
     md.append("")
 
     md.append("## 2. Asset Allocation & Target Drift")
@@ -648,6 +839,18 @@ def generate_ai_digest_markdown(ai_state: Dict[str, Any]) -> str:
         md.append(f"- **Projected Monthly Passive Cashflow**: **Rp {pi['projected_monthly_passive_income_idr']:,.0f}** (${pi['projected_monthly_passive_income_usd']:,.2f}/mo)")
         if pi.get("fi_coverage_pct", 0) > 0:
             md.append(f"- **Financial Independence Coverage**: **{pi['fi_coverage_pct']}%** of living burn covered (*{pi['fi_status']}*)")
+        md.append("")
+
+    if ai_state.get("sukuk_and_coupon_schedule") and ai_state["sukuk_and_coupon_schedule"].get("schedule"):
+        sc = ai_state["sukuk_and_coupon_schedule"]
+        md.append("### 3.5 Guaranteed SBN Sukuk Monthly Coupons (Payout: Every 10th)")
+        md.append(f"- **Total SBN Principal**: Rp {sc['total_principal_idr']:,.0f}")
+        md.append(f"- **Net Monthly Coupon Inflow**: **Rp {sc['total_net_monthly_idr']:,.0f}** (${sc['total_net_monthly_usd']:,.2f}/mo) *(After 10% PPh Final)*")
+        md.append("")
+        md.append("| Sukuk Seri | Principal | Annual Coupon | Net Monthly Payout | Maturity Date | Horizon |")
+        md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+        for item in sc["schedule"]:
+            md.append(f"| **{item['asset']}** | Rp {item['principal_idr']:,.0f} | {item['annual_coupon_pct']:.2f}% | **Rp {item['net_monthly_idr']:,.0f}**/mo | {item.get('maturity_date', 'N/A')} | {item.get('months_to_maturity', 0)} mo |")
         md.append("")
 
     md.append("## 4. Currency Exposure")
