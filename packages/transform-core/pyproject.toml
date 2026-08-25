@@ -3,7 +3,7 @@ name = "transform-core"
 version = "0.1.0"
 description = "Shared utilities for portfolio data transformation"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.7"
 license = {text = "MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -15,10 +15,10 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "requests>=2.32.5",
-    "pydantic>=2.10.0",
+    "requests>=2.34.2",
+    "pydantic>=2.13.4",
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.12.0"]
+requires = ["uv_build>=0.12.5,<0.12.6"]
 build-backend = "uv_build"

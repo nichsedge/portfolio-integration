@@ -13,7 +13,7 @@ version = "0.1.0"
 description = "Unified financial portfolio ETL pipeline & MCP server aggregating KSEI, DeBank, Binance, and Alchemy"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.12"
+requires-python = ">=3.14.7"
 dependencies = [
     "pipeline-runner",
     "portfolio-app",
@@ -23,17 +23,17 @@ dependencies = [
     "sansfinance-client",
     "ksei",
     "debank-scraper",
-    "pendulum>=3.0.0",
-    "python-dotenv>=1.0.0",
-    "pydantic>=2.10.0",
+    "pendulum>=3.2.0",
+    "python-dotenv>=1.2.3",
+    "pydantic>=2.13.4",
     "holidays>=0.103",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.9.0",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.25.0",
+    "ruff>=0.16.4",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=0.26.0",
 ]
 
 [tool.uv.sources]

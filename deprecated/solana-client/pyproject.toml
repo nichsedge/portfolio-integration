@@ -3,7 +3,7 @@ name = "solana-client"
 version = "0.1.0"
 description = "A Python client for fetching Solana token holdings and prices"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.7"
 license = {text = "MIT"}
 authors = [
     {name = "Your Name", email = "your.email@example.com"},
@@ -18,11 +18,11 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "solana>=0.36.1",
-    "solders>=0.21.0",
-    "requests>=2.32.3",
-    "python-dotenv>=1.0.1",
-    "pendulum>=3.0.0",
+    "solana>=0.40.2",
+    "solders>=0.29.0",
+    "requests>=2.34.2",
+    "python-dotenv>=1.2.3",
+    "pendulum>=3.2.0",
 ]
 
 [project.scripts]
