@@ -72,6 +72,7 @@ def _download_via_wrangler(bucket: str, dest: Path) -> bool:
         capture_output=True,
         text=True,
         timeout=120,
+        check=False,
     )
     return result.returncode == 0 and dest.exists()
 
@@ -111,8 +112,8 @@ def download_url(account_id: str, access_key: str, secret_key: str, bucket: str)
 
     host = f"{account_id}.r2.cloudflarestorage.com"
     key = R2_BLOB_NAME.replace("/", "%2F")
-    now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-    datestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
+    now = int(datetime.datetime.now(datetime.UTC).timestamp())
+    datestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d")
     scope = f"{datestamp}/auto/s3/aws4_request"
     canonical = f"GET\n/{bucket}/{key}\n\nhost:{host}\nx-amz-content-sha256:UNSIGNED-PAYLOAD\nx-amz-date:{now}\n"
     signed_headers = "host;x-amz-content-sha256;x-amz-date"
