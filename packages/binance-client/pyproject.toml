@@ -6,7 +6,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.14.7"
 dependencies = [
-    "ccxt>=4.5.75",
+    "ccxt>=4.5.76",
     "python-dotenv>=1.2.3",
     "pendulum>=3.2.0",
     "transform-core",
@@ -19,5 +19,5 @@ transform-core = { workspace = true }
 binance-fetch = "binance_client:main"
 
 [build-system]
-requires = ["uv_build>=0.12.5,<0.12.6"]
+requires = ["uv_build>=0.12.7,<0.12.8"]
 build-backend = "uv_build"

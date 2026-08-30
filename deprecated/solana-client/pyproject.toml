@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "solana>=0.40.2",
+    "solana>=0.40.3",
     "solders>=0.29.0",
     "requests>=2.34.2",
     "python-dotenv>=1.2.3",

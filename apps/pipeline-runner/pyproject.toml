@@ -23,5 +23,5 @@ fetch-only = "pipeline_runner:fetch_entrypoint"
 integrate-only = "pipeline_runner:integrate_entrypoint"
 
 [build-system]
-requires = ["uv_build>=0.12.5,<0.12.6"]
+requires = ["uv_build>=0.12.7,<0.12.8"]
 build-backend = "uv_build"

@@ -15,13 +15,13 @@ classifiers = [
 ]
 dependencies = [
     "pendulum>=3.2.0",
-    "pandas>=2.3.3",
+    "pandas>=3.0.5",
     "requests>=2.34.2",
     "matplotlib>=3.11.1",
     "transform-core",
     "rich>=15.0.0",
-    "google-cloud-storage>=2.19.0",
-    "pydantic>=2.13.4",
+    "google-cloud-storage>=3.13.1",
+    "pydantic>=2.13.5",
 ]
 
 [project.scripts]
@@ -31,7 +31,7 @@ portfolio-dashboard = "portfolio_app.dashboard:main"
 portfolio-compact = "portfolio_app.snapshot_compactor:main"
 
 [build-system]
-requires = ["uv_build>=0.12.5,<0.12.6"]
+requires = ["uv_build>=0.12.7,<0.12.8"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
