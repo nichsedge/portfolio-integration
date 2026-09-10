@@ -52,6 +52,8 @@ class PortfolioHoldingRecord(BaseModel):
     price: float | None = Field(default=None, ge=0.0, description="Unit price in base currency")
     value_idr: float = Field(default=0.0, ge=0.0, description="Converted valuation in IDR")
     value_usd: float = Field(default=0.0, ge=0.0, description="Converted valuation in USD")
+    cost_basis_idr: float | None = Field(default=None, ge=0.0, description="Optional cost basis / total purchase cost in IDR")
+    avg_buy_price: float | None = Field(default=None, ge=0.0, description="Optional average purchase price per unit")
     asset_class: str = Field(..., min_length=1, description="High-level asset class")
     account_id: int | None = Field(default=None, description="Optional foreign key to Sans Finance account ID")
     account_key: str | None = Field(default=None, description="Optional stable account key identifier")
@@ -67,7 +69,7 @@ class PortfolioHoldingRecord(BaseModel):
             pass
         return v
 
-    @field_validator("quantity", "price", "value_idr", "value_usd", mode="before")
+    @field_validator("quantity", "price", "value_idr", "value_usd", "cost_basis_idr", "avg_buy_price", mode="before")
     @classmethod
     def parse_numeric(cls, v: Any) -> float | None:
         if v is None:

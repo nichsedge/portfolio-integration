@@ -27,12 +27,16 @@ def test_portfolio_holding_record_valid():
         price=3000.0,
         value_idr=70000000.0,
         value_usd=4500.0,
+        cost_basis_idr=50000000.0,
+        avg_buy_price=2000.0,
         asset_class="Crypto",
         account="0x123",
     )
     assert holding.asset == "ETH"
     assert holding.quantity == 1.5
     assert holding.value_usd == 4500.0
+    assert holding.cost_basis_idr == 50000000.0
+    assert holding.avg_buy_price == 2000.0
 
 
 def test_portfolio_holding_record_numeric_cleaning():

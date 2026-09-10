@@ -92,10 +92,8 @@ def upload_to_r2(file_path: Path, bucket_name: Optional[str] = None) -> bool:
     bucket = bucket_name or detected_bucket
 
     prefix, latest_key_name = get_prefix_and_latest_name(file_path)
-    destination_key = f"{prefix}/{file_path.name}"
-    keys_to_upload = [destination_key]
-    if latest_key_name and not file_path.name.startswith("latest"):
-        keys_to_upload.append(f"{prefix}/{latest_key_name}")
+    target_key = f"{prefix}/{latest_key_name}" if latest_key_name else f"{prefix}/{file_path.name}"
+    keys_to_upload = [target_key]
 
     # Method 1: S3 SigV4 direct upload if credentials available
     if account_id and access_key and secret_key:
