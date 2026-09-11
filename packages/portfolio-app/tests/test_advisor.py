@@ -59,3 +59,18 @@ def test_screen_dry_powder_opportunities():
         assert "StockCode" in o
         assert "roe" in o
         assert o["roe"] >= 18.0
+
+
+def test_get_atracker_work_hours():
+    advisor = PortfolioAdvisor()
+    hours = advisor.get_atracker_work_hours(days=30)
+    assert isinstance(hours, float)
+    assert hours >= 0.0
+
+
+def test_generate_markdown_briefing():
+    advisor = PortfolioAdvisor()
+    briefing = advisor.generate_markdown_briefing()
+    assert "🏛️ *Sovereign Portfolio & Market Advisor*" in briefing
+    assert "Net Worth:" in briefing
+    assert "BBCA" in briefing
