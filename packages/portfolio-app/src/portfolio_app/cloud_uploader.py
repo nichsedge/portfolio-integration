@@ -50,6 +50,8 @@ def get_prefix_and_latest_name(file_path: Path) -> Tuple[str, Optional[str]]:
         return "ai", "latest_state.json"
     if "ai_digest" in name:
         return "ai", "latest_digest.md"
+    if "advisor" in name:
+        return "ai", "latest_advisor.json"
     if "_snapshot.json" in name:
         return "snapshots", "latest.json"
     if file_path.suffix == ".json":

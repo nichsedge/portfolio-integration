@@ -403,14 +403,102 @@ class PortfolioAdvisor:
         return "\n".join(lines)
 
 
+    def get_advisor_payload(self) -> dict[str, Any]:
+        """Generate structured JSON payload for downstream consumers (SansFinance / iERP)."""
+        state = self.load_portfolio_state()
+        if not state:
+            return {}
+
+        macro = state.get("macro_metrics", {})
+        holdings = state.get("top_holdings", [])
+        net_worth_idr = float(macro.get("net_worth_idr", 0))
+
+        cash_accounts = [
+            h for h in holdings
+            if h.get("asset_class") == "Cash & Equivalents"
+            or h.get("category") in ["Bank Account", "Stablecoin"]
+        ]
+        total_cash_idr = float(sum(h.get("value_idr", 0) for h in cash_accounts))
+        cash_pct = (total_cash_idr / net_worth_idr * 100) if net_worth_idr > 0 else 0.0
+
+        work_hours_30d = float(self.get_atracker_work_hours(days=30))
+        mom_growth_idr = float(macro.get("mom_growth_idr", 0))
+        hourly_velocity = (mom_growth_idr / work_hours_30d) if work_hours_30d > 0 and mom_growth_idr > 0 else 0.0
+        velocity_str = f"Rp {hourly_velocity:,.0f}/hr" if hourly_velocity > 0 else "N/A"
+
+        equity_analysis = self.analyze_equity_holdings(holdings)
+        opportunities = self.screen_dry_powder_opportunities(limit=3)
+
+        return {
+            "date": state.get("state_date", ""),
+            "hourly_velocity_idr": hourly_velocity,
+            "velocity_str": velocity_str,
+            "atracker_work_hours_30d": work_hours_30d,
+            "dry_powder_idr": total_cash_idr,
+            "dry_powder_pct": round(cash_pct, 1),
+            "net_worth_idr": net_worth_idr,
+            "mom_growth_idr": mom_growth_idr,
+            "action_summary": "Maintain blue-chip/fixed income anchors. Barbell crypto (~6.5% NW) untouched.",
+            "equities_verdicts": [
+                {
+                    "ticker": r["ticker"],
+                    "value_idr": r["value_idr"],
+                    "weight_pct": round(r["weight_pct"], 1),
+                    "verdict": r["verdict"],
+                    "nff_20d": r["nff_20d"],
+                }
+                for r in equity_analysis
+            ],
+            "opportunities": [
+                {
+                    "ticker": o["StockCode"],
+                    "name": o["StockName"],
+                    "close": o["Close"],
+                    "roe": round(o["roe"], 1),
+                    "per": round(o["per"], 1),
+                    "nff_20d": o["nff_20d"],
+                }
+                for o in opportunities
+            ],
+        }
+
+    def save_latest(self) -> Path:
+        """Write latest_advisor.json and embed into latest snapshot JSON for downstream consumers."""
+        payload = self.get_advisor_payload()
+        advisor_path = self.data_dir / "latest_advisor.json"
+        advisor_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+        # Also embed into latest snapshot JSON
+        snapshot_candidates = [
+            f for f in sorted(self.data_dir.glob("*_snapshot.json"))
+            if not f.name.startswith("latest")
+        ]
+        if snapshot_candidates:
+            latest_snap = snapshot_candidates[-1]
+            try:
+                data = json.loads(latest_snap.read_text(encoding="utf-8"))
+                data["advisor"] = payload
+                latest_snap.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+        return advisor_path
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Portfolio Advisor Decision Support Engine")
     parser.add_argument("--markdown", action="store_true", help="Output pure markdown text instead of rich tables")
+    parser.add_argument("--json", action="store_true", help="Output structured JSON payload for downstream apps")
+    parser.add_argument("--no-save", action="store_true", help="Do not persist latest_advisor.json")
     args = parser.parse_args()
 
     advisor = PortfolioAdvisor()
-    if args.markdown:
+    if not args.no_save:
+        advisor.save_latest()
+
+    if args.json:
+        print(json.dumps(advisor.get_advisor_payload(), indent=2))
+    elif args.markdown:
         print(advisor.generate_markdown_briefing())
     else:
         advisor.generate_report()
