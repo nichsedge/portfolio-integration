@@ -688,6 +688,14 @@ def run_mcp_stdio_server():
                         "capabilities": {"tools": {}}
                     }
                 }
+            elif method in ("notifications/initialized", "initialized", "notifications/cancelled"):
+                continue
+            elif method == "ping":
+                resp = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {}
+                }
             elif method == "tools/list":
                 resp = {
                     "jsonrpc": "2.0",
@@ -750,6 +758,9 @@ def run_mcp_stdio_server():
                         "content": [{"type": "text", "text": json.dumps(result, indent=2)}]
                     }
                 }
+            elif req_id is None:
+                # Per JSON-RPC 2.0: The Server MUST NOT reply to a Notification
+                continue
             else:
                 resp = {
                     "jsonrpc": "2.0",
@@ -761,19 +772,21 @@ def run_mcp_stdio_server():
             sys.stdout.flush()
 
         except Exception as e:
-            err_resp = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32603, "message": f"Internal error: {str(e)}"}
-            }
-            sys.stdout.write(json.dumps(err_resp) + "\n")
-            sys.stdout.flush()
+            req_id_val = req.get("id") if "req" in locals() and isinstance(req, dict) else None
+            if req_id_val is not None:
+                err_resp = {
+                    "jsonrpc": "2.0",
+                    "id": req_id_val,
+                    "error": {"code": -32603, "message": f"Internal error: {e!s}"}
+                }
+                sys.stdout.write(json.dumps(err_resp) + "\n")
+                sys.stdout.flush()
 
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Portfolio MCP Server and AI Query CLI")
-    parser.add_argument("--mcp", action="store_true", help="Run as stdio MCP JSON-RPC Server")
+    parser.add_argument("--mcp", action="store_true", help="Run as stdio MCP JSON-RPC Server (default when no action specified)")
     parser.add_argument("--dashboard", action="store_true", help="Launch executive visual terminal dashboard")
     parser.add_argument("--audit", action="store_true", help="Run and print portfolio health audit")
     parser.add_argument("--unified", action="store_true", help="Print unified 360° financial state (portfolio + cashflow)")
@@ -851,9 +864,8 @@ def main():
     elif args.history:
         print(json.dumps(tool_get_historical_performance(), indent=2))
     else:
-        # Default to printing the audit and digest options
-        result = tool_get_portfolio_health_audit()
-        print(json.dumps(result, indent=2))
+        # Default to running the MCP stdio server
+        run_mcp_stdio_server()
 
 
 if __name__ == "__main__":

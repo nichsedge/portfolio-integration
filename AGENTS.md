@@ -84,11 +84,12 @@ uv run fetch-only      # Fetch all sources in parallel
 uv run integrate-only  # Skip fetching, just transform and integrate
 
 # AI Agent & MCP Integration (Hermes, Claude, Cursor, Goose, Antigravity)
+uv run portfolio-mcp          # Run as stdio JSON-RPC 2.0 MCP server (default or --mcp)
 uv run portfolio-mcp --audit    # Run automated portfolio health check
 uv run portfolio-mcp --digest   # Output latest token-optimized Markdown brief
 uv run portfolio-mcp --json     # Output latest token-optimized state JSON
-uv run portfolio-mcp --mcp      # Run as stdio JSON-RPC 2.0 MCP server
 uv run portfolio-ai-state       # Regenerate latest AI state and digest
+uv run portfolio-advisor        # Run quantitative advisor decision card (integrates with idx-bei)
 ```
 
 ---
