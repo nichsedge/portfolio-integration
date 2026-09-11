@@ -22,6 +22,7 @@ dependencies = [
     "rich>=15.0.0",
     "google-cloud-storage>=2.19.0",
     "pydantic>=2.13.4",
+    "duckdb>=1.5.5",
 ]
 
 [project.scripts]
@@ -29,6 +30,7 @@ portfolio-mcp = "portfolio_app.mcp_server:main"
 portfolio-ai-state = "portfolio_app.ai_state_generator:main"
 portfolio-dashboard = "portfolio_app.dashboard:main"
 portfolio-compact = "portfolio_app.snapshot_compactor:main"
+portfolio-advisor = "portfolio_app.advisor:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.12.6"]
