@@ -38,6 +38,24 @@ class PortfolioAdvisor:
         self.idx_parquet_dir = self.idx_root / "data" / "parquet"
         self.console = Console()
 
+    def get_atracker_work_hours(self, days: int = 30) -> float:
+        """Query active (non-idle) focused work hours from atracker telemetry."""
+        import sqlite3
+        atracker_db = Path.home() / ".local/share/atracker/atracker.db"
+        if not atracker_db.exists():
+            return 0.0
+        try:
+            con = sqlite3.connect(f"file:{atracker_db}?mode=ro", uri=True)
+            cur = con.cursor()
+            cur.execute(
+                f"SELECT COALESCE(SUM(duration_secs) / 3600.0, 0.0) FROM events WHERE is_idle = 0 AND timestamp >= (SELECT datetime(MAX(timestamp), '-{days} days') FROM events)"
+            )
+            row = cur.fetchone()
+            con.close()
+            return float(row[0]) if row else 0.0
+        except Exception:
+            return 0.0
+
     def load_portfolio_state(self) -> dict[str, Any]:
         """Load latest portfolio state and snapshot."""
         state_path = self.data_dir / "latest_ai_state.json"
@@ -236,10 +254,17 @@ class PortfolioAdvisor:
         total_cash_idr = sum(h.get("value_idr", 0) for h in cash_accounts)
         cash_pct = (total_cash_idr / net_worth_idr * 100) if net_worth_idr > 0 else 0
 
+        # Telemetry & Time-to-Wealth Velocity
+        work_hours_30d = self.get_atracker_work_hours(days=30)
+        mom_growth_idr = macro.get("mom_growth_idr", 0)
+        hourly_velocity = (mom_growth_idr / work_hours_30d) if work_hours_30d > 0 and mom_growth_idr > 0 else 0
+        velocity_str = f"Rp {hourly_velocity:,.0f}/hr" if hourly_velocity > 0 else "N/A"
+
         # Header Panel
         summary_text = (
             f"[bold cyan]Total Net Worth:[/bold cyan] Rp {net_worth_idr:,.0f} (~${macro.get('net_worth_usd', 0):,.0f} USD)\n"
             f"[bold green]Liquid Dry Powder (Cash & USDT):[/bold green] Rp {total_cash_idr:,.0f} ({cash_pct:.1f}% of NW)\n"
+            f"[bold yellow]Active Focused Work (30d):[/bold yellow] {work_hours_30d:.1f} hrs (Sovereign Velocity: [bold green]{velocity_str}[/bold green])\n"
             f"[bold magenta]Liabilities:[/bold magenta] Rp 0 (100% Debt-Free)"
         )
         self.console.print(
@@ -326,10 +351,69 @@ class PortfolioAdvisor:
             )
         )
 
+    def generate_markdown_briefing(self) -> str:
+        """Generate a clean Telegram/Markdown text briefing without terminal ANSI codes."""
+        state = self.load_portfolio_state()
+        if not state:
+            return "⚠️ No portfolio state available."
+
+        macro = state.get("macro_metrics", {})
+        holdings = state.get("top_holdings", [])
+        net_worth_idr = macro.get("net_worth_idr", 0)
+
+        cash_accounts = [
+            h for h in holdings
+            if h.get("asset_class") == "Cash & Equivalents"
+            or h.get("category") in ["Bank Account", "Stablecoin"]
+        ]
+        total_cash_idr = sum(h.get("value_idr", 0) for h in cash_accounts)
+        cash_pct = (total_cash_idr / net_worth_idr * 100) if net_worth_idr > 0 else 0
+
+        work_hours_30d = self.get_atracker_work_hours(days=30)
+        mom_growth_idr = macro.get("mom_growth_idr", 0)
+        hourly_velocity = (mom_growth_idr / work_hours_30d) if work_hours_30d > 0 and mom_growth_idr > 0 else 0
+        velocity_str = f"Rp {hourly_velocity:,.0f}/hr" if hourly_velocity > 0 else "N/A"
+
+        lines = [
+            "🏛️ *Sovereign Portfolio & Market Advisor*",
+            f"• *Net Worth:* Rp {net_worth_idr:,.0f} (~${macro.get('net_worth_usd', 0):,.0f} USD)",
+            f"• *Dry Powder (Liquid):* Rp {total_cash_idr:,.0f} ({cash_pct:.1f}% of NW)",
+            f"• *Work Velocity (30d):* {work_hours_30d:.1f} hrs ({velocity_str})",
+            "",
+            "📈 *Equity Holdings Verdicts:*",
+        ]
+
+        equity_analysis = self.analyze_equity_holdings(holdings)
+        for r in equity_analysis:
+            flow_sign = "+" if r["nff_20d"] >= 0 else ""
+            lines.append(f"• *{r['ticker']}* ({r['weight_pct']:.1f}% | Rp {r['value_idr']:,.0f}): {r['verdict']} | 20d Flow: {flow_sign}{r['nff_20d']/1e6:.1f}M")
+
+        lines.extend([
+            "",
+            "🎯 *Screened Deployment Picks (High ROE + Inst. Inflow):*",
+        ])
+        opportunities = self.screen_dry_powder_opportunities(limit=3)
+        for o in opportunities:
+            lines.append(f"• *{o['StockCode']}* ({o['StockName'][:20]}): ROE {o['roe']:.1f}%, PER {o['per']:.1f}x | Flow: +{o['nff_20d']/1e6:.1f}M")
+
+        lines.extend([
+            "",
+            "⚡ *Action:* Maintain blue-chip/fixed income anchors. Barbell crypto (~6.5% NW) untouched.",
+        ])
+        return "\n".join(lines)
+
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Portfolio Advisor Decision Support Engine")
+    parser.add_argument("--markdown", action="store_true", help="Output pure markdown text instead of rich tables")
+    args = parser.parse_args()
+
     advisor = PortfolioAdvisor()
-    advisor.generate_report()
+    if args.markdown:
+        print(advisor.generate_markdown_briefing())
+    else:
+        advisor.generate_report()
 
 
 if __name__ == "__main__":
