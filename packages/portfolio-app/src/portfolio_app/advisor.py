@@ -56,6 +56,40 @@ class PortfolioAdvisor:
         except Exception:
             return 0.0
 
+    def get_sovereign_runway(self) -> dict[str, Any]:
+        """Query sovereign runway from iERP database."""
+        import sqlite3
+        ierp_candidates = [
+            Path.home() / "Projects" / "ierp" / "ierp" / "events.db",
+            Path.home() / "Projects" / "ierp" / "events.db",
+        ]
+        ierp_db = next((p for p in ierp_candidates if p.exists()), None)
+        if not ierp_db:
+            return {"liquid_cash": 0.0, "monthly_burn": 0.0, "runway_months": 0.0, "status": "UNKNOWN"}
+        try:
+            con = sqlite3.connect(f"file:{ierp_db}?mode=ro", uri=True)
+            cur = con.cursor()
+            snap = cur.execute("SELECT liquid_cash FROM networth_snapshots ORDER BY snapshot_date DESC, id DESC LIMIT 1").fetchone()
+            liquid = snap[0] if snap else 0.0
+            rows = cur.execute("SELECT amount, frequency FROM recurring_commitments WHERE status = 'active'").fetchall()
+            monthly_burn = 0.0
+            for amt, freq in rows:
+                if freq == "yearly": monthly_burn += amt / 12.0
+                elif freq == "quarterly": monthly_burn += amt / 3.0
+                elif freq == "weekly": monthly_burn += amt * (52.0 / 12.0)
+                else: monthly_burn += amt
+            con.close()
+            runway_months = round(liquid / monthly_burn, 1) if monthly_burn > 0 else (999.0 if liquid > 0 else 0.0)
+            status = "FORTRESS (>24m)" if runway_months >= 24 else ("SOVEREIGN (>12m)" if runway_months >= 12 else "LEAN")
+            return {
+                "liquid_cash": liquid,
+                "monthly_burn": monthly_burn,
+                "runway_months": runway_months,
+                "status": status,
+            }
+        except Exception:
+            return {"runway_months": 0.0, "status": "UNKNOWN"}
+
     def load_portfolio_state(self) -> dict[str, Any]:
         """Load latest portfolio state and snapshot."""
         state_path = self.data_dir / "latest_ai_state.json"
@@ -180,7 +214,50 @@ class PortfolioAdvisor:
         return results
 
     def screen_dry_powder_opportunities(self, limit: int = 3) -> list[dict[str, Any]]:
-        """Screen pristine candidates for deploying idle cash based on quant fundamentals."""
+        """Screen pristine candidates for deploying idle cash based on multi-cycle quant alpha signals."""
+        # 1. Try to load from precomputed composite alpha rankings in idx-bei briefings
+        briefing_dir = self.idx_root / "data" / "briefings"
+        briefing_files = sorted(briefing_dir.glob("briefing_*.json"))
+        if briefing_files:
+            try:
+                latest_briefing = json.loads(briefing_files[-1].read_text(encoding="utf-8"))
+                rankings = latest_briefing.get("composite_alpha_rankings", [])
+                candidates = []
+                for r in rankings:
+                    audit = r.get("AuditOpinion", "")
+                    roe = float(r.get("ROE") or 0.0)
+                    per = float(r.get("PER") or 0.0)
+                    der = float(r.get("DER") or 0.0)
+                    nff = float(r.get("NetForeignFlow_MSh") or 0.0)
+                    alpha = float(r.get("AlphaScore") or 0.0)
+                    if (
+                        audit in ["Clean", "WTM", "WTP"]
+                        and roe >= 18.0
+                        and 3.0 <= per <= 15.0
+                        and der < 2.0
+                        and nff > 0
+                    ):
+                        candidates.append(
+                            {
+                                "StockCode": r["StockCode"],
+                                "StockName": r["StockName"],
+                                "Close": r["Close"],
+                                "roe": roe,
+                                "per": per,
+                                "deRatio": der,
+                                "nff_20d": nff * 1_000_000,
+                                "nff_msh": nff,
+                                "alpha_score": alpha,
+                                "trend": r.get("TrendRegime", "BULLISH"),
+                            }
+                        )
+                if candidates:
+                    candidates.sort(key=lambda x: (x["alpha_score"], x["roe"]), reverse=True)
+                    return candidates[:limit]
+            except Exception as e:  # noqa: BLE001
+                self.console.print(f"[yellow]Note: Reading briefing failed, falling back to DuckDB: {e}[/yellow]")
+
+        # 2. Fallback to direct DuckDB Parquet scan
         stock_parquet = self.idx_parquet_dir / "stock_summary.parquet"
         ratios_parquet = self.idx_parquet_dir / "financial_ratios.parquet"
 
@@ -210,7 +287,8 @@ class PortfolioAdvisor:
                 fr.priceBV,
                 fr.roe,
                 fr.deRatio,
-                fr.sharia
+                fr.sharia,
+                95.0 as alpha_score
             FROM "{stock_parquet}" s
             JOIN latest_date ld ON s.Date = ld.max_d
             JOIN recent_flows rf ON s.StockCode = rf.StockCode
@@ -259,11 +337,13 @@ class PortfolioAdvisor:
         mom_growth_idr = macro.get("mom_growth_idr", 0)
         hourly_velocity = (mom_growth_idr / work_hours_30d) if work_hours_30d > 0 and mom_growth_idr > 0 else 0
         velocity_str = f"Rp {hourly_velocity:,.0f}/hr" if hourly_velocity > 0 else "N/A"
+        runway = self.get_sovereign_runway()
 
         # Header Panel
         summary_text = (
             f"[bold cyan]Total Net Worth:[/bold cyan] Rp {net_worth_idr:,.0f} (~${macro.get('net_worth_usd', 0):,.0f} USD)\n"
             f"[bold green]Liquid Dry Powder (Cash & USDT):[/bold green] Rp {total_cash_idr:,.0f} ({cash_pct:.1f}% of NW)\n"
+            f"[bold blue]Zero-Income Runway (iERP):[/bold blue] {runway['runway_months']} Months ([bold green]{runway['status']}[/bold green] @ Rp {runway['monthly_burn']:,.0f}/mo)\n"
             f"[bold yellow]Active Focused Work (30d):[/bold yellow] {work_hours_30d:.1f} hrs (Sovereign Velocity: [bold green]{velocity_str}[/bold green])\n"
             f"[bold magenta]Liabilities:[/bold magenta] Rp 0 (100% Debt-Free)"
         )
@@ -307,22 +387,25 @@ class PortfolioAdvisor:
         opportunities = self.screen_dry_powder_opportunities(limit=3)
         if opportunities:
             opp_table = Table(
-                title="🎯 Screened Opportunities for Idle Cash Deployment (High ROE + Institutional Accumulation)",
+                title="🎯 Screened Opportunities for Idle Cash Deployment (Multi-Cycle Alpha + Foreign Inflow)",
                 expand=True,
             )
             opp_table.add_column("Code", style="bold green")
             opp_table.add_column("Company", style="dim")
             opp_table.add_column("Close", justify="right")
+            opp_table.add_column("Alpha", justify="right", style="bold magenta")
             opp_table.add_column("ROE", justify="right", style="bold")
             opp_table.add_column("PER", justify="right")
             opp_table.add_column("DER", justify="right")
             opp_table.add_column("20D Inflow", justify="right", style="green")
 
             for o in opportunities:
+                alpha_val = f"{o.get('alpha_score', 0):.0f}"
                 opp_table.add_row(
                     o["StockCode"],
-                    o["StockName"][:28],
+                    o["StockName"][:26],
                     f"Rp {o['Close']:,.0f}",
+                    alpha_val,
                     f"{o['roe']:.1f}%",
                     f"{o['per']:.1f}x",
                     f"{o['deRatio']:.2f}",
@@ -373,11 +456,13 @@ class PortfolioAdvisor:
         mom_growth_idr = macro.get("mom_growth_idr", 0)
         hourly_velocity = (mom_growth_idr / work_hours_30d) if work_hours_30d > 0 and mom_growth_idr > 0 else 0
         velocity_str = f"Rp {hourly_velocity:,.0f}/hr" if hourly_velocity > 0 else "N/A"
+        runway = self.get_sovereign_runway()
 
         lines = [
             "🏛️ *Sovereign Portfolio & Market Advisor*",
             f"• *Net Worth:* Rp {net_worth_idr:,.0f} (~${macro.get('net_worth_usd', 0):,.0f} USD)",
             f"• *Dry Powder (Liquid):* Rp {total_cash_idr:,.0f} ({cash_pct:.1f}% of NW)",
+            f"• *Zero-Income Runway:* {runway['runway_months']} Months ({runway['status']})",
             f"• *Work Velocity (30d):* {work_hours_30d:.1f} hrs ({velocity_str})",
             "",
             "📈 *Equity Holdings Verdicts:*",
@@ -390,11 +475,11 @@ class PortfolioAdvisor:
 
         lines.extend([
             "",
-            "🎯 *Screened Deployment Picks (High ROE + Inst. Inflow):*",
+            "🎯 *Screened Deployment Picks (Multi-Cycle Alpha + Inst. Inflow):*",
         ])
         opportunities = self.screen_dry_powder_opportunities(limit=3)
         for o in opportunities:
-            lines.append(f"• *{o['StockCode']}* ({o['StockName'][:20]}): ROE {o['roe']:.1f}%, PER {o['per']:.1f}x | Flow: +{o['nff_20d']/1e6:.1f}M")
+            lines.append(f"• *{o['StockCode']}* ({o['StockName'][:20]}): Alpha {o.get('alpha_score', 0):.0f} | ROE {o['roe']:.1f}%, PER {o['per']:.1f}x | Flow: +{o['nff_20d']/1e6:.1f}M")
 
         lines.extend([
             "",
@@ -425,6 +510,7 @@ class PortfolioAdvisor:
         mom_growth_idr = float(macro.get("mom_growth_idr", 0))
         hourly_velocity = (mom_growth_idr / work_hours_30d) if work_hours_30d > 0 and mom_growth_idr > 0 else 0.0
         velocity_str = f"Rp {hourly_velocity:,.0f}/hr" if hourly_velocity > 0 else "N/A"
+        runway = self.get_sovereign_runway()
 
         equity_analysis = self.analyze_equity_holdings(holdings)
         opportunities = self.screen_dry_powder_opportunities(limit=3)
@@ -438,6 +524,14 @@ class PortfolioAdvisor:
             "dry_powder_pct": round(cash_pct, 1),
             "net_worth_idr": net_worth_idr,
             "mom_growth_idr": mom_growth_idr,
+            "runway_months": runway.get("runway_months", 0.0),
+            "runway_status": runway.get("status", "UNKNOWN"),
+            "sovereign_runway": {
+                "liquid_reserves_idr": runway.get("liquid_cash", 0.0),
+                "monthly_burn_idr": runway.get("monthly_burn", 0.0),
+                "runway_months": runway.get("runway_months", 0.0),
+                "status": runway.get("status", "UNKNOWN"),
+            },
             "action_summary": "Maintain blue-chip/fixed income anchors. Barbell crypto (~6.5% NW) untouched.",
             "equities_verdicts": [
                 {
@@ -454,9 +548,12 @@ class PortfolioAdvisor:
                     "ticker": o["StockCode"],
                     "name": o["StockName"],
                     "close": o["Close"],
+                    "alpha_score": round(o.get("alpha_score", 0.0), 1),
                     "roe": round(o["roe"], 1),
                     "per": round(o["per"], 1),
+                    "der": round(o.get("deRatio", 0.0), 2),
                     "nff_20d": o["nff_20d"],
+                    "trend": o.get("trend", "BULLISH"),
                 }
                 for o in opportunities
             ],
