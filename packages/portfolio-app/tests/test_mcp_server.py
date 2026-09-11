@@ -52,3 +52,43 @@ def test_mcp_rebalancing_and_passive_income_tools():
     if "error" not in stress_res:
         assert "stress_test" in stress_res
         assert "resilience_score" in stress_res["stress_test"]
+
+
+def test_mcp_stdio_server_protocol(monkeypatch):
+    import io
+    import json
+
+    from portfolio_app.mcp_server import run_mcp_stdio_server
+
+    input_data = (
+        '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}\n'
+        '{"jsonrpc": "2.0", "method": "notifications/initialized"}\n'
+        '{"jsonrpc": "2.0", "id": 2, "method": "ping"}\n'
+        '{"jsonrpc": "2.0", "id": 3, "method": "tools/list"}\n'
+    )
+    fake_stdin = io.StringIO(input_data)
+    fake_stdout = io.StringIO()
+
+    monkeypatch.setattr("sys.stdin", fake_stdin)
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+
+    run_mcp_stdio_server()
+
+    output_lines = [json.loads(line) for line in fake_stdout.getvalue().strip().split("\n") if line.strip()]
+    assert len(output_lines) == 3
+
+    # Check initialize response
+    assert output_lines[0]["jsonrpc"] == "2.0"
+    assert output_lines[0]["id"] == 1
+    assert "serverInfo" in output_lines[0]["result"]
+
+    # Check ping response
+    assert output_lines[1]["jsonrpc"] == "2.0"
+    assert output_lines[1]["id"] == 2
+    assert output_lines[1]["result"] == {}
+
+    # Check tools/list response
+    assert output_lines[2]["jsonrpc"] == "2.0"
+    assert output_lines[2]["id"] == 3
+    assert "tools" in output_lines[2]["result"]
+

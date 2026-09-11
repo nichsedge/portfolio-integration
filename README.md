@@ -99,8 +99,8 @@ uv run alchemy-fetch    # Fetch Solana balances
 The repository includes a Model Context Protocol (MCP) server and token-optimized AI state generator for assistants (Antigravity, Claude, Cursor, Goose):
 
 ```bash
-# Run stdio MCP server for AI assistants
-uv run portfolio-mcp --mcp
+# Run stdio MCP server for AI assistants (default or with --mcp)
+uv run portfolio-mcp
 
 # Generate token-optimized Markdown brief
 uv run portfolio-mcp --digest
@@ -116,6 +116,9 @@ uv run portfolio-ai-state
 
 # Launch interactive terminal portfolio dashboard
 uv run portfolio-dashboard
+
+# Run quantitative portfolio advisor & decision card (integrates with idx-bei)
+uv run portfolio-advisor
 ```
 
 ---
