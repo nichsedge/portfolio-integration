@@ -149,7 +149,7 @@ def run_stress_test(
     )
 
     recommendations = []
-    if total_liquid_reserves / monthly_burn_idr < 6.0:
+    if monthly_burn_idr > 0 and (total_liquid_reserves / monthly_burn_idr) < 6.0:
         recommendations.append("Increase pure liquid bank / money market reserves to withstand sudden zero-income events.")
     if max_drawdown_pct > 25.0:
         recommendations.append("High drawdown risk detected in severe crash scenario. Consider boosting SBN fixed coupon allocation.")
