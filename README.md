@@ -117,8 +117,10 @@ uv run portfolio-ai-state
 # Launch interactive terminal portfolio dashboard
 uv run portfolio-dashboard
 
-# Run quantitative portfolio advisor & decision card (integrates with idx-bei)
+# Run quantitative portfolio advisor & 3-tier sovereign runway matrix (integrates with idx-bei)
 uv run portfolio-advisor
+uv run portfolio-advisor --markdown   # Clean Markdown brief for Telegram/cron
+uv run portfolio-advisor --json       # Structured payload for downstream consumers
 ```
 
 ---
