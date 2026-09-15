@@ -89,7 +89,9 @@ uv run portfolio-mcp --audit    # Run automated portfolio health check
 uv run portfolio-mcp --digest   # Output latest token-optimized Markdown brief
 uv run portfolio-mcp --json     # Output latest token-optimized state JSON
 uv run portfolio-ai-state       # Regenerate latest AI state and digest
-uv run portfolio-advisor        # Run quantitative advisor decision card (integrates with idx-bei)
+uv run portfolio-advisor        # Quantitative advisor & 3-tier sovereign runway matrix (multi-cycle idx-bei signals)
+uv run portfolio-advisor --markdown # Non-ANSI Markdown briefing for Telegram/cron
+uv run portfolio-advisor --json     # Structured JSON payload for downstream apps
 ```
 
 ---
