@@ -25,7 +25,8 @@ from portfolio_app.transformers.ksei_transform import clean_json
 from portfolio_app.transformers.debank_transform import extract_relevant
 from portfolio_app.ai_state_generator import build_and_save_ai_state
 from portfolio_app.data_validator import validate_holdings_and_sources, print_data_quality_report
-from transform_core import get_data_dir, parse_usd, get_exchange_rate, FILTER_THRESHOLDS
+from transform_core import get_data_dir, parse_usd, get_exchange_rate, FILTER_THRESHOLDS, upsert_snapshot
+
 
 
 STABLE_COINS = {"USDT", "USDC", "DAI", "FDUSD", "TUSD", "BUSD", "PYUSD", "USDP"}
@@ -541,9 +542,19 @@ def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rat
         "liquid_cash_accounts": liquid_cash_accounts,
         "all_holdings": all_data
     }
-    
+
+    try:
+        upsert_snapshot(snapshot)
+    except Exception as e:
+        print(f"⚠️ Warning: Failed to upsert snapshot into portfolio.db: {e}")
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, indent=2)
+
+    latest_json_path = output_path.parent / "latest_snapshot.json"
+    with open(latest_json_path, "w", encoding="utf-8") as f:
+        json.dump(snapshot, f, indent=2)
+
 
 
 def print_rich_summary(td: str, all_data: List[Dict[str, Any]], exchange_rate: float, sources_info: List[str]):
