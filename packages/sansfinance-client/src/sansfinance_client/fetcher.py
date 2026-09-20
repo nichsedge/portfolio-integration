@@ -83,58 +83,83 @@ def _which(name: str):
     return which(name)
 
 
+def _download_direct_r2(account_id: str, access_key: str, secret_key: str, bucket: str, dest: Path) -> bool:
+    """Download the DB file directly from R2 using standard S3 SigV4 GET request."""
+    import datetime
+    import hashlib
+    import hmac
+    import urllib.request
+
+    try:
+        host = f"{account_id}.r2.cloudflarestorage.com"
+        now = datetime.datetime.now(datetime.timezone.utc)
+        amz_date = now.strftime("%Y%m%dT%H%M%SZ")
+        date_stamp = now.strftime("%Y%m%d")
+        canonical_uri = f"/{bucket}/{R2_BLOB_NAME}"
+        endpoint_url = f"https://{host}{canonical_uri}"
+        payload_hash = hashlib.sha256(b"").hexdigest()
+
+        headers = {
+            "host": host,
+            "x-amz-content-sha256": payload_hash,
+            "x-amz-date": amz_date,
+        }
+        canonical_headers = "".join([f"{k}:{v}\n" for k, v in sorted(headers.items())])
+        signed_headers = ";".join(sorted(headers.keys()))
+        canonical_request = (
+            f"GET\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
+        )
+        canonical_req_hash = hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()
+        credential_scope = f"{date_stamp}/auto/s3/aws4_request"
+        string_to_sign = (
+            f"AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{canonical_req_hash}"
+        )
+
+        def sign(k, msg):
+            return hmac.new(k, msg.encode("utf-8"), hashlib.sha256).digest()
+
+        k_date = sign(("AWS4" + secret_key).encode("utf-8"), date_stamp)
+        k_region = sign(k_date, "auto")
+        k_service = sign(k_region, "s3")
+        k_signing = sign(k_service, "aws4_request")
+        signature = hmac.new(
+            k_signing, string_to_sign.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+        auth_header = (
+            f"AWS4-HMAC-SHA256 Credential={access_key}/{credential_scope}, "
+            f"SignedHeaders={signed_headers}, Signature={signature}"
+        )
+
+        req = urllib.request.Request(
+            endpoint_url,
+            headers={
+                "Authorization": auth_header,
+                "Host": host,
+                "x-amz-date": amz_date,
+                "x-amz-content-sha256": payload_hash,
+            },
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            dest.write_bytes(resp.read())
+        return dest.exists() and dest.stat().st_size > 0
+    except Exception as e:
+        print(f"⚠️ Direct R2 download failed ({e}); trying wrangler fallback...")
+        return False
+
+
 def download_db(dest: Path) -> None:
-    """Download the SQLite DB to dest via signed URL or wrangler fallback."""
+    """Download the SQLite DB to dest via direct S3 SigV4 or wrangler fallback."""
     account_id, access_key, secret_key, bucket = load_r2_credentials()
 
     if account_id and access_key and secret_key:
-        try:
-            url = download_url(account_id, access_key, secret_key, bucket)
-            import urllib.request
-
-            urllib.request.urlretrieve(url, dest)
-            if dest.exists() and dest.stat().st_size > 0:
-                return
-        except Exception as e:
-            print(f"⚠️ Direct R2 download failed ({e}); trying wrangler fallback...")
+        if _download_direct_r2(account_id, access_key, secret_key, bucket, dest):
+            return
 
     if _download_via_wrangler(bucket, dest):
         return
 
     raise RuntimeError("Failed to download Sans Finance DB from R2 (no credentials or CLI).")
-
-
-def download_url(account_id: str, access_key: str, secret_key: str, bucket: str) -> str:
-    """Generate a presigned GET URL for the DB object."""
-    import datetime
-    import hashlib
-    import hmac
-
-    host = f"{account_id}.r2.cloudflarestorage.com"
-    key = R2_BLOB_NAME.replace("/", "%2F")
-    now = int(datetime.datetime.now(datetime.UTC).timestamp())
-    datestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d")
-    scope = f"{datestamp}/auto/s3/aws4_request"
-    canonical = f"GET\n/{bucket}/{key}\n\nhost:{host}\nx-amz-content-sha256:UNSIGNED-PAYLOAD\nx-amz-date:{now}\n"
-    signed_headers = "host;x-amz-content-sha256;x-amz-date"
-    string_to_sign = (
-        f"AWS4-HMAC-SHA256\n{now}\n{scope}\n{hashlib.sha256(canonical.encode()).hexdigest()}"
-    )
-
-    def hmac_sha256(key, msg):
-        return hmac.new(key, msg.encode(), hashlib.sha256).digest()
-
-    k_date = hmac_sha256(f"AWS4{secret_key}".encode(), datestamp)
-    k_region = hmac_sha256(k_date, "auto")
-    k_service = hmac_sha256(k_region, "s3")
-    k_signing = hmac_sha256(k_service, "aws4_request")
-    signature = hmac.new(k_signing, string_to_sign.encode(), hashlib.sha256).hexdigest()
-
-    query = (
-        f"?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential={access_key}%2F{scope}"
-        f"&X-Amz-Date={now}&X-Amz-Expires=60&X-Amz-SignedHeaders={signed_headers}&X-Amz-Signature={signature}"
-    )
-    return f"https://{host}/{bucket}/{key}{query}"
 
 
 def extract_raw(db_path: Path) -> dict:

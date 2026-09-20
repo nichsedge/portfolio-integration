@@ -25,9 +25,22 @@ When updating, debugging, or fixing a specific component or data source:
   * **Binance**: `uv run binance-fetch`
   * **Alchemy**: `uv run alchemy-fetch`
   * **SansFinance**: `uv run sansfinance-fetch`
+  * **DefiLlama**: `uv run llama-fetch <subcommand>` or `uv run pytest packages/defillama-client/tests/`
   * **Individual Transformer**: Test only the specific transformer file (e.g. `python packages/portfolio-app/src/portfolio_app/transformers/debank_transform.py`)
 
 Running the full pipeline executes cloud uploads (GCS), triggers rate-limited APIs, and spawns unnecessary browser processes. Keep tests strictly scoped to the modified component.
+
+---
+
+## 🦙 DefiLlama Free API & Upstream Protocol
+
+DefiLlama continuously releases new endpoints, modifies metrics, and refines routing. When working on `packages/defillama-client/`:
+* **Canonical Upstream Reference**: Prior to adding, editing, or debugging endpoints, inspect:
+  - **Root LLM Specs**: [`https://api-docs.defillama.com/llms.txt`](https://api-docs.defillama.com/llms.txt)
+  - **Free Endpoints List**: [`https://api-docs.defillama.com/llms-free.txt`](https://api-docs.defillama.com/llms-free.txt)
+  - **Free OpenAPI Specification**: [`https://api-docs.defillama.com/defillama-openapi-free.json`](https://api-docs.defillama.com/defillama-openapi-free.json)
+* **Strict Free Tier Only**: Only consume public unauthenticated routes (`api.llama.fi`, `coins.llama.fi`, `yields.llama.fi`, `stablecoins.llama.fi`). NEVER route requests to `pro-api.llama.fi` without user API keys.
+* **Rate-Limit Guard**: Honor caching (`cache_ttl >= 300`) to respect free-tier fair use limits (~300 req/min).
 
 ---
 
@@ -51,6 +64,8 @@ This is a Python monorepo managed with `uv` implementing a 4-stage ETL pipeline 
 packages/
 ├── alchemy-client/   # Solana token holdings fetcher
 ├── binance-client/   # Binance exchange client via CCXT
+├── defillama-client/ # DefiLlama free API client (prices, yields, protocols, stables)
+├── sansfinance-client/ # Cash & P2P accounts fetcher from R2
 ├── transform-core/   # Shared utilities (data dir resolution, parsing)
 └── portfolio-app/    # Transformers, integrators, and MCP server
 
@@ -77,6 +92,7 @@ uv run ksei dump
 uv run binance-fetch
 uv run alchemy-fetch
 uv run sansfinance-fetch
+uv run llama-fetch prices "coingecko:ethereum"   # DefiLlama free API CLI
 
 # Full pipeline options (Only run when explicitly requested)
 uv run run-all         # Full pipeline: fetch + transform + integrate + GCS upload

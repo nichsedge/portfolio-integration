@@ -23,6 +23,7 @@ dependencies = [
     "google-cloud-storage>=2.19.0",
     "pydantic>=2.13.4",
     "duckdb>=1.5.5",
+    "defillama-client",
 ]
 
 [project.scripts]
@@ -38,3 +39,4 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 transform-core = { workspace = true }
+defillama-client = { workspace = true }

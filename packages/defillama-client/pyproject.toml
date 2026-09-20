@@ -1,0 +1,22 @@
+[project]
+name = "defillama-client"
+version = "0.1.0"
+description = "DefiLlama free API client for token prices, yields, protocols, and stablecoin analytics"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.14.7"
+dependencies = [
+    "httpx>=0.28.0",
+    "pydantic>=2.10.0",
+    "transform-core",
+]
+
+[tool.uv.sources]
+transform-core = { workspace = true }
+
+[project.scripts]
+llama-fetch = "defillama_client.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.12.6"]
+build-backend = "uv_build"

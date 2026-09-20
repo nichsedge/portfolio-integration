@@ -11,6 +11,7 @@ Unified financial portfolio ETL pipeline and Model Context Protocol (MCP) server
 - **Binance** (`binance-fetch`): Centralized cryptocurrency exchange balances via CCXT.
 - **Alchemy** (`alchemy-fetch`): Solana SPL token and native balance tracking via Alchemy RPC.
 - **Sans Finance** (`sansfinance-fetch`): Bank cash, wallet cash, and P2P lending balances from the Sans Finance app DB (Cloudflare R2).
+- **DefiLlama** (`llama-fetch`): Multi-chain token prices, live yield pools, protocol counterparty audits, and stablecoin market data via 100% free unauthenticated API ([upstream LLM docs](https://api-docs.defillama.com/llms.txt)).
 
 ---
 
@@ -25,6 +26,7 @@ portfolio-integration/
 ├── packages/
 │   ├── alchemy-client/        # Solana token holdings fetcher
 │   ├── binance-client/        # Binance exchange client via CCXT
+│   ├── defillama-client/      # DefiLlama free API client (prices, yields, protocols, stables)
 │   ├── transform-core/        # Shared parsing and data directory utilities
 │   └── portfolio-app/         # Transformers, integrators, MCP server & AI state tools
 ├── AGENTS.md                  # Guidelines for AI coding assistants
@@ -85,13 +87,14 @@ uv run fetch-only
 uv run integrate-only
 ```
 
-### Individual Data Fetchers
+### Individual Data Fetchers & Crypto Intelligence
 
 ```bash
 uv run debank-scrape    # Fetch EVM DeFi holdings
 uv run ksei dump        # Fetch Indonesian equities / securities
 uv run binance-fetch    # Fetch Binance balances
 uv run alchemy-fetch    # Fetch Solana balances
+uv run llama-fetch      # DefiLlama free API CLI (prices, yields, protocol, stables, fees)
 ```
 
 ### AI State & MCP Server
