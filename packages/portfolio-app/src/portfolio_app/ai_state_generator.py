@@ -13,12 +13,12 @@ import pendulum
 
 # Import utils
 try:
-    from transform_core import get_data_dir, get_exchange_rate, upsert_ai_state
+    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot, upsert_ai_state
 except ImportError:
     repo_root = Path(__file__).resolve().parents[4]
     import sys
     sys.path.append(str(repo_root / "packages/transform-core/src"))
-    from transform_core import get_data_dir, get_exchange_rate, upsert_ai_state
+    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot, upsert_ai_state
 
 
 
@@ -953,38 +953,35 @@ def generate_ai_digest_markdown(ai_state: Dict[str, Any]) -> str:
     return "\n".join(md)
 
 
-def build_and_save_ai_state(snapshot_path: Path, output_dir: Optional[Path] = None) -> Dict[str, Any]:
+def build_and_save_ai_state(
+    snapshot_input: Path | Dict[str, Any], output_dir: Optional[Path] = None
+) -> Dict[str, Any]:
     """Loads snapshot, computes AI state, and writes out both JSON and Markdown digests."""
     data_dir = get_data_dir()
     if output_dir is None:
         output_dir = data_dir
 
-    if not snapshot_path.exists():
-        raise FileNotFoundError(f"Snapshot file not found: {snapshot_path}")
-
-    with open(snapshot_path, "r", encoding="utf-8") as f:
-        current_snapshot = json.load(f)
+    if isinstance(snapshot_input, dict):
+        current_snapshot = snapshot_input
+    else:
+        if not snapshot_input.exists():
+            raise FileNotFoundError(f"Snapshot file not found: {snapshot_input}")
+        with open(snapshot_input, "r", encoding="utf-8") as f:
+            current_snapshot = json.load(f)
 
     all_snapshots = load_historical_snapshots(data_dir)
     ai_state = generate_ai_state(current_snapshot, all_snapshots)
     digest_md = generate_ai_digest_markdown(ai_state)
 
     date = ai_state["state_date"]
-    
-    # Save dated and 'latest' files
-    dated_json_path = output_dir / f"{date}_ai_state.json"
+
+    # Save latest files (WUDAS compliant single-leaf artifacts)
     latest_json_path = output_dir / "latest_ai_state.json"
-    
-    dated_md_path = output_dir / f"{date}_ai_digest.md"
     latest_md_path = output_dir / "latest_ai_digest.md"
 
-    with open(dated_json_path, "w", encoding="utf-8") as f:
-        json.dump(ai_state, f, indent=2)
     with open(latest_json_path, "w", encoding="utf-8") as f:
         json.dump(ai_state, f, indent=2)
 
-    with open(dated_md_path, "w", encoding="utf-8") as f:
-        f.write(digest_md)
     with open(latest_md_path, "w", encoding="utf-8") as f:
         f.write(digest_md)
 
@@ -994,29 +991,46 @@ def build_and_save_ai_state(snapshot_path: Path, output_dir: Optional[Path] = No
         print(f"⚠️ Warning: Failed to save AI state to portfolio.db: {e}")
 
     print(f"🤖 AI Financial State generated:")
-    print(f"   • JSON: {dated_json_path.name} & {latest_json_path.name}")
-    print(f"   • Digest: {dated_md_path.name} & {latest_md_path.name}")
+    print(f"   • JSON: {latest_json_path.name}")
+    print(f"   • Digest: {latest_md_path.name}")
 
     return ai_state
 
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Generate AI Financial State and Digest")
     parser.add_argument("--date", help="Date in YYYY-MM-DD format (defaults to latest available)")
     args = parser.parse_args()
 
     data_dir = get_data_dir()
-    if args.date:
-        target_file = data_dir / f"{args.date}_snapshot.json"
-    else:
-        snapshots = sorted([f for f in data_dir.glob("*_snapshot.json") if not f.name.startswith("latest")])
-        if not snapshots:
-            print("❌ No snapshots found in data directory.")
-            exit(1)
-        target_file = snapshots[-1]
+    snapshot = None
 
-    build_and_save_ai_state(target_file)
+    # 1. Try portfolio.db SSOT
+    try:
+        snapshot = get_full_snapshot(date=args.date)
+    except Exception:
+        pass
+
+    # 2. Fallback to latest_snapshot.json or dated file
+    if not snapshot:
+        if args.date:
+            target_file = data_dir / f"{args.date}_snapshot.json"
+        else:
+            target_file = data_dir / "latest_snapshot.json"
+            if not target_file.exists():
+                snapshots = sorted([f for f in data_dir.glob("*_snapshot.json") if not f.name.startswith("latest")])
+                target_file = snapshots[-1] if snapshots else None
+
+        if not target_file or not target_file.exists():
+            print("❌ No snapshots found in database or data directory.")
+            sys.exit(1)
+
+        build_and_save_ai_state(target_file)
+        return
+
+    build_and_save_ai_state(snapshot)
 
 
 if __name__ == "__main__":
