@@ -13,12 +13,13 @@ import pendulum
 
 # Import utils
 try:
-    from transform_core import get_data_dir, get_exchange_rate
+    from transform_core import get_data_dir, get_exchange_rate, upsert_ai_state
 except ImportError:
     repo_root = Path(__file__).resolve().parents[4]
     import sys
     sys.path.append(str(repo_root / "packages/transform-core/src"))
-    from transform_core import get_data_dir, get_exchange_rate
+    from transform_core import get_data_dir, get_exchange_rate, upsert_ai_state
+
 
 
 # Target asset allocation benchmarks (can be customized)
@@ -494,12 +495,52 @@ def calculate_tax_efficiency_audit(
 
 
 def load_historical_snapshots(data_dir: Path) -> List[Dict[str, Any]]:
-    """Loads all snapshot files sorted chronologically."""
+    """Loads all snapshots sorted chronologically, preferring portfolio.db if available."""
+    db_path = data_dir / "portfolio.db"
+    if db_path.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM snapshots ORDER BY date ASC").fetchall()
+            if rows:
+                snapshots = []
+                for r in rows:
+                    td = r["date"]
+                    cats = conn.execute("SELECT category, value_idr, percentage, count FROM categories WHERE snapshot_date = ?", (td,)).fetchall()
+                    acs = conn.execute("SELECT asset_class, value_idr, percentage, count FROM asset_classes WHERE snapshot_date = ?", (td,)).fetchall()
+                    meta = json.loads(r["metadata_json"]) if r["metadata_json"] else {}
+                    meta["date"] = td
+                    meta["exchange_rate"] = r["exchange_rate"]
+                    meta["total_items"] = r["total_items"]
+                    snapshots.append({
+                        "metadata": meta,
+                        "totals": {
+                            "net_worth_idr": r["net_worth_idr"],
+                            "net_worth_usd": r["net_worth_usd"],
+                            "total_assets_idr": r["total_assets_idr"],
+                            "total_liabilities_idr": r["total_liabilities_idr"],
+                            "investments_idr": r["investments_idr"],
+                            "investments_usd": r["investments_usd"],
+                            "bank_cash_idr": r["bank_cash_idr"],
+                            "bank_cash_usd": r["bank_cash_usd"],
+                        },
+                        "allocation": {
+                            "by_category": [dict(c) for c in cats],
+                            "by_asset_class": [dict(ac) for ac in acs],
+                        }
+                    })
+                conn.close()
+                return snapshots
+            conn.close()
+        except Exception as e:
+            print(f"⚠️ Warning: Could not read snapshots from portfolio.db: {e}")
+
+    # Fallback to local files
     snapshot_files = sorted(list(data_dir.glob("*_snapshot.json")))
     snapshots = []
 
     for file_path in snapshot_files:
-        # Skip latest/special pointers if any
         if file_path.name.startswith("latest"):
             continue
         try:
@@ -509,9 +550,9 @@ def load_historical_snapshots(data_dir: Path) -> List[Dict[str, Any]]:
         except Exception as e:
             print(f"⚠️ Warning: Could not read {file_path}: {e}")
 
-    # Sort by metadata date
     snapshots.sort(key=lambda s: s.get("metadata", {}).get("date", ""))
     return snapshots
+
 
 
 def analyze_currency_exposure(holdings: List[Dict[str, Any]], exchange_rate: float) -> Dict[str, Any]:
@@ -946,6 +987,11 @@ def build_and_save_ai_state(snapshot_path: Path, output_dir: Optional[Path] = No
         f.write(digest_md)
     with open(latest_md_path, "w", encoding="utf-8") as f:
         f.write(digest_md)
+
+    try:
+        upsert_ai_state(date, ai_state, digest_md)
+    except Exception as e:
+        print(f"⚠️ Warning: Failed to save AI state to portfolio.db: {e}")
 
     print(f"🤖 AI Financial State generated:")
     print(f"   • JSON: {dated_json_path.name} & {latest_json_path.name}")

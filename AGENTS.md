@@ -8,9 +8,10 @@ Universal guidelines for AI coding agents (Antigravity, Claude Code, Cursor, Cop
 
 `portfolio-integration` is the **Canonical Aggregator and ETL Engine for Multi-Asset Investments** in the workstation's Personal Data Architecture ([`~/Projects/DATA_ARCHITECTURE.md`](file:///home/al/Projects/DATA_ARCHITECTURE.md)):
 
-* **SSOT for Investments**: Tracks Indonesian equities (KSEI), EVM DeFi (DeBank), CEX crypto (Binance), and Solana (Alchemy).
+* **SSOT for Investments**: Tracks Indonesian equities (KSEI), EVM DeFi (DeBank), CEX crypto (Binance), and Solana (Alchemy) inside canonical SQLite SSOT (`data/portfolio.db` with WAL mode).
 * **Cash & P2P Intake**: Pulls cash and P2P lending balances from the `sansfinance` Android database snapshot on Cloudflare R2 (`sansfinance-fetch`).
-* **Output to iERP**: Generates standardized daily snapshots (`YYYY-MM-DD_snapshot.json`) and AI digests (`latest_ai_state.json`) which feed high-level net worth totals into `ierp insert-snapshot`.
+* **WUDAS & R2 Sync**: Adheres to the Workstation Unified Data Architecture Standard. Avoids loose dated JSON files. Emits single-leaf `latest_snapshot.json` and `latest_ai_state.json`. Syncs `portfolio.db` bidirectionally with Cloudflare R2 (`db/portfolio_latest.sqlite`) via `uv run scripts/sync_r2.py [status|push|pull|auto]`.
+* **Output to iERP**: Feeds high-level net worth and liquid cash totals into `ierp` (`events.db` `networth_snapshots`).
 * **Boundary**: Do NOT track individual operational expenses, budgets, or cash pacing here (those belong in `sansfinance`). Do NOT track personal life events or contacts here (those belong in `ierp`).
 
 ---

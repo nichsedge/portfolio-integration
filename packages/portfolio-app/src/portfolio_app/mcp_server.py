@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional
 
 # Setup imports
 try:
-    from transform_core import get_data_dir, get_exchange_rate
+    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot
     from defillama_client import DefiLlamaClient
     from portfolio_app.ai_state_generator import (
         build_and_save_ai_state,
@@ -25,7 +25,7 @@ except ImportError:
     sys.path.append(str(repo_root / "packages/portfolio-app/src"))
     sys.path.append(str(repo_root / "packages/transform-core/src"))
     sys.path.append(str(repo_root / "packages/defillama-client/src"))
-    from transform_core import get_data_dir, get_exchange_rate
+    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot
     from defillama_client import DefiLlamaClient
     from portfolio_app.ai_state_generator import (
         build_and_save_ai_state,
@@ -42,22 +42,49 @@ def get_latest_snapshot_path() -> Optional[Path]:
     return snapshots[-1] if snapshots else None
 
 
-def tool_get_portfolio_overview(date: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Returns the high-level financial overview: Net worth, MoM growth, asset class allocation, and liquidity.
-    """
+def resolve_snapshot(date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Resolve snapshot from portfolio.db SSOT, with fallback to latest_snapshot.json or legacy files."""
+    try:
+        snap = get_full_snapshot(date=date if date != "latest" else None)
+        if snap:
+            return snap
+    except Exception:
+        pass
+
     data_dir = get_data_dir()
-    if date:
+    if not date or date == "latest":
+        latest_file = data_dir / "latest_snapshot.json"
+        if latest_file.exists():
+            try:
+                with open(latest_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+
+    if date and date != "latest":
         snap_path = data_dir / f"{date}_snapshot.json"
     else:
         snap_path = get_latest_snapshot_path()
 
-    if not snap_path or not snap_path.exists():
+    if snap_path and snap_path.exists():
+        try:
+            with open(snap_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    return None
+
+
+def tool_get_portfolio_overview(date: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Returns the high-level financial overview: Net worth, MoM growth, asset class allocation, and liquidity.
+    """
+    snapshot = resolve_snapshot(date)
+    if not snapshot:
         return {"error": f"Snapshot not found for date: {date or 'latest'}"}
 
-    with open(snap_path, "r", encoding="utf-8") as f:
-        snapshot = json.load(f)
-
+    data_dir = get_data_dir()
     all_snapshots = load_historical_snapshots(data_dir)
     state = generate_ai_state(snapshot, all_snapshots)
 
@@ -79,17 +106,9 @@ def tool_get_holdings_breakdown(
     """
     Returns individual holdings filtered by asset class or minimum USD value.
     """
-    data_dir = get_data_dir()
-    if date:
-        snap_path = data_dir / f"{date}_snapshot.json"
-    else:
-        snap_path = get_latest_snapshot_path()
-
-    if not snap_path or not snap_path.exists():
+    snapshot = resolve_snapshot(date)
+    if not snapshot:
         return [{"error": f"Snapshot not found for date: {date or 'latest'}"}]
-
-    with open(snap_path, "r", encoding="utf-8") as f:
-        snapshot = json.load(f)
 
     holdings = snapshot.get("holdings", [])
     fx = snapshot.get("metadata", {}).get("exchange_rate", 16000.0)

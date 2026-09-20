@@ -128,14 +128,30 @@ uv run portfolio-advisor --json       # Structured payload for downstream consum
 
 ---
 
-## Data Pipeline Flow
+## Data Pipeline Flow & SQLite SSOT (WUDAS)
 
-All data follows a standardized 4-stage pipeline:
+All portfolio data follows a standardized pipeline storing time-series and holdings in a canonical SQLite database:
 
-1. **Extract**: Raw output saved to `{YYYY-MM-DD}_raw_<source>.json`.
+1. **Extract**: Raw output saved to temporary `{YYYY-MM-DD}_raw_<source>.json`.
 2. **Transform**: Normalized and curated into `{YYYY-MM-DD}_curated_<source>.json`.
-3. **Integrate**: Merged into unified `{YYYY-MM-DD}_portfolio.csv` & `{YYYY-MM-DD}_snapshot.json`.
-4. **Cloud & AI Digest**: Uploaded to Google Cloud Storage (if configured) and rendered into `latest_ai_state.json` & `latest_ai_digest.md`.
+3. **Integrate**: Upserted into `data/portfolio.db` (SQLite with WAL mode) and emitted as `latest_snapshot.json`.
+4. **Cloud & AI Digest**: Exported to `latest_ai_state.json`, `latest_ai_digest.md`, and bidirectionally synchronized with Cloudflare R2 (`db/portfolio_latest.sqlite`).
+
+### Cloudflare R2 Bidirectional Sync
+
+```bash
+# Check sync status between local DB and Cloudflare R2
+uv run scripts/sync_r2.py status
+
+# Push local portfolio.db to R2 (atomic checkpointing + MD5 validation)
+uv run scripts/sync_r2.py push
+
+# Pull latest snapshot from R2
+uv run scripts/sync_r2.py pull
+
+# Auto-sync (checks timestamps, avoids unnecessary bandwidth)
+uv run scripts/sync_r2.py auto
+```
 
 ---
 
