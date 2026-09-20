@@ -11,6 +11,7 @@ resolution-markers = [
 members = [
     "alchemy-client",
     "binance-client",
+    "defillama-client",
     "pipeline-runner",
     "portfolio-app",
     "portfolio-integration",
@@ -436,6 +437,23 @@ dependencies = [
     { name = "mcp" },
     { name = "playwright" },
     { name = "python-dotenv" },
+]
+
+[[package]]
+name = "defillama-client"
+version = "0.1.0"
+source = { editable = "packages/defillama-client" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "transform-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.0" },
+    { name = "pydantic", specifier = ">=2.10.0" },
+    { name = "transform-core", editable = "packages/transform-core" },
 ]
 
 [[package]]
@@ -1296,6 +1314,7 @@ name = "portfolio-app"
 version = "0.1.0"
 source = { editable = "packages/portfolio-app" }
 dependencies = [
+    { name = "defillama-client" },
     { name = "duckdb" },
     { name = "google-cloud-storage" },
     { name = "matplotlib" },
@@ -1309,6 +1328,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "defillama-client", editable = "packages/defillama-client" },
     { name = "duckdb", specifier = ">=1.5.5" },
     { name = "google-cloud-storage", specifier = ">=2.19.0" },
     { name = "matplotlib", specifier = ">=3.11.1" },
@@ -1328,6 +1348,7 @@ dependencies = [
     { name = "alchemy-client" },
     { name = "binance-client" },
     { name = "debank-scraper" },
+    { name = "defillama-client" },
     { name = "holidays" },
     { name = "ksei" },
     { name = "pendulum" },
@@ -1351,6 +1372,7 @@ requires-dist = [
     { name = "alchemy-client", editable = "packages/alchemy-client" },
     { name = "binance-client", editable = "packages/binance-client" },
     { name = "debank-scraper", git = "https://github.com/nichsedge/debank-scraper.git" },
+    { name = "defillama-client", editable = "packages/defillama-client" },
     { name = "holidays", specifier = ">=0.103" },
     { name = "ksei", git = "https://github.com/nichsedge/ksei.git" },
     { name = "pendulum", specifier = ">=3.2.0" },

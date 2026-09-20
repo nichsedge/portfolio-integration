@@ -21,6 +21,7 @@ dependencies = [
     "alchemy-client",
     "transform-core",
     "sansfinance-client",
+    "defillama-client",
     "ksei",
     "debank-scraper",
     "pendulum>=3.2.0",
@@ -43,6 +44,7 @@ binance-client = { workspace = true }
 alchemy-client = { workspace = true }
 transform-core = { workspace = true }
 sansfinance-client = { workspace = true }
+defillama-client = { workspace = true }
 ksei = { git = "https://github.com/nichsedge/ksei.git" }
 debank-scraper = { git = "https://github.com/nichsedge/debank-scraper.git" }
 

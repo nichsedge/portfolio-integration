@@ -24,6 +24,10 @@ def test_mcp_tools_schema():
     assert "get_scenario_stress_test" in tool_names
     assert "get_cashflow_analysis" in tool_names
     assert "get_unified_financial_state" in tool_names
+    assert "crypto_get_token_prices" in tool_names
+    assert "crypto_screen_yields" in tool_names
+    assert "crypto_audit_protocol" in tool_names
+    assert "crypto_stablecoin_summary" in tool_names
 
 
 def test_mcp_rebalancing_and_passive_income_tools():

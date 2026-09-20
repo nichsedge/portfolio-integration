@@ -13,6 +13,7 @@ from typing import Dict, Any, List, Optional
 # Setup imports
 try:
     from transform_core import get_data_dir, get_exchange_rate
+    from defillama_client import DefiLlamaClient
     from portfolio_app.ai_state_generator import (
         build_and_save_ai_state,
         generate_ai_digest_markdown,
@@ -23,7 +24,9 @@ except ImportError:
     repo_root = Path(__file__).resolve().parents[4]
     sys.path.append(str(repo_root / "packages/portfolio-app/src"))
     sys.path.append(str(repo_root / "packages/transform-core/src"))
+    sys.path.append(str(repo_root / "packages/defillama-client/src"))
     from transform_core import get_data_dir, get_exchange_rate
+    from defillama_client import DefiLlamaClient
     from portfolio_app.ai_state_generator import (
         build_and_save_ai_state,
         generate_ai_digest_markdown,
@@ -567,6 +570,42 @@ def tool_get_upcoming_cashflow() -> Dict[str, Any]:
     }
 
 
+def tool_crypto_get_token_prices(coins: list[str]) -> dict[str, Any]:
+    """Fetch spot multi-chain token prices by address or coingecko ID via DefiLlama free API."""
+    with DefiLlamaClient() as client:
+        return client.get_token_prices(coins)
+
+
+def tool_crypto_screen_yields(
+    min_tvl_usd: float = 5_000_000.0,
+    chain: str | None = None,
+    project: str | None = None,
+    stablecoin_only: bool = True,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Screen DeFi yield pools across chains using DefiLlama free API."""
+    with DefiLlamaClient() as client:
+        return client.get_pools(
+            min_tvl=min_tvl_usd,
+            chain=chain,
+            project=project,
+            stablecoin_only=stablecoin_only,
+            limit=limit,
+        )
+
+
+def tool_crypto_audit_protocol(protocol_slug: str) -> dict[str, Any]:
+    """Audit protocol TVL, category, audits, and chain distribution via DefiLlama free API."""
+    with DefiLlamaClient() as client:
+        return client.get_protocol(protocol_slug)
+
+
+def tool_crypto_stablecoin_summary(top_n: int = 10) -> list[dict[str, Any]]:
+    """Get market cap and supply growth metrics for top stablecoins via DefiLlama free API."""
+    with DefiLlamaClient() as client:
+        return client.get_stablecoins(limit=top_n)
+
+
 # MCP Server Definitions
 TOOLS_SCHEMA = [
     {
@@ -663,6 +702,56 @@ TOOLS_SCHEMA = [
         "name": "get_scenario_stress_test",
         "description": "Simulate macroeconomic crisis stress test (Market Crash, Currency Devaluation, Zero Income, Stagflation) on portfolio and cashflow.",
         "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "crypto_get_token_prices",
+        "description": "Fetch real-time spot prices for crypto tokens across chains (e.g. coingecko:ethereum, ethereum:0x...) via DefiLlama free API.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "coins": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Token identifiers (e.g. ['coingecko:ethereum', 'coingecko:bitcoin'])"
+                }
+            },
+            "required": ["coins"]
+        }
+    },
+    {
+        "name": "crypto_screen_yields",
+        "description": "Screen DeFi yield pools and lending APYs across chains (filtered by TVL, chain, and stablecoin flag) via DefiLlama free API.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "min_tvl_usd": {"type": "number", "description": "Minimum pool TVL in USD (default 5,000,000)"},
+                "chain": {"type": "string", "description": "Optional chain filter (e.g. arbitrum, ethereum, solana)"},
+                "project": {"type": "string", "description": "Optional protocol filter (e.g. aave-v3, pendle)"},
+                "stablecoin_only": {"type": "boolean", "description": "Whether to only return stablecoin pools (default true)"},
+                "limit": {"type": "integer", "description": "Max number of pools to return (default 20)"}
+            }
+        }
+    },
+    {
+        "name": "crypto_audit_protocol",
+        "description": "Audit counterparty risk, TVL, and audits for a DeFi protocol via DefiLlama free API.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "protocol_slug": {"type": "string", "description": "Protocol slug (e.g. aave-v3, uniswap, lido)"}
+            },
+            "required": ["protocol_slug"]
+        }
+    },
+    {
+        "name": "crypto_stablecoin_summary",
+        "description": "Fetch macro stablecoin supply, market cap, and 7d growth metrics via DefiLlama free API.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "top_n": {"type": "integer", "description": "Number of top stablecoins to return (default 10)"}
+            }
+        }
     }
 ]
 
@@ -741,6 +830,20 @@ def run_mcp_stdio_server():
                     result = tool_get_tax_efficiency_audit()
                 elif tool_name == "get_scenario_stress_test":
                     result = tool_get_scenario_stress_test()
+                elif tool_name == "crypto_get_token_prices":
+                    result = tool_crypto_get_token_prices(args.get("coins", []))
+                elif tool_name == "crypto_screen_yields":
+                    result = tool_crypto_screen_yields(
+                        min_tvl_usd=args.get("min_tvl_usd", 5_000_000.0),
+                        chain=args.get("chain"),
+                        project=args.get("project"),
+                        stablecoin_only=args.get("stablecoin_only", True),
+                        limit=args.get("limit", 20),
+                    )
+                elif tool_name == "crypto_audit_protocol":
+                    result = tool_crypto_audit_protocol(args.get("protocol_slug", ""))
+                elif tool_name == "crypto_stablecoin_summary":
+                    result = tool_crypto_stablecoin_summary(top_n=args.get("top_n", 10))
                 else:
                     resp = {
                         "jsonrpc": "2.0",
@@ -805,6 +908,10 @@ def main():
     parser.add_argument("--holdings", action="store_true", help="Print all holdings breakdown")
     parser.add_argument("--history", action="store_true", help="Print historical multi-month performance")
     parser.add_argument("--class-filter", help="Filter holdings by asset class")
+    parser.add_argument("--crypto-yields", action="store_true", help="Query top DeFi yield pools via DefiLlama")
+    parser.add_argument("--crypto-stables", action="store_true", help="Query top stablecoins by market cap via DefiLlama")
+    parser.add_argument("--crypto-protocol", help="Audit protocol TVL & info via DefiLlama slug (e.g. aave-v3)")
+    parser.add_argument("--crypto-prices", nargs="+", help="Query token prices via DefiLlama (e.g. coingecko:ethereum)")
     args = parser.parse_args()
 
     if args.mcp:
@@ -863,6 +970,14 @@ def main():
         print(json.dumps(tool_get_holdings_breakdown(asset_class=args.class_filter), indent=2))
     elif args.history:
         print(json.dumps(tool_get_historical_performance(), indent=2))
+    elif args.crypto_yields:
+        print(json.dumps(tool_crypto_screen_yields(), indent=2))
+    elif args.crypto_stables:
+        print(json.dumps(tool_crypto_stablecoin_summary(), indent=2))
+    elif args.crypto_protocol:
+        print(json.dumps(tool_crypto_audit_protocol(args.crypto_protocol), indent=2))
+    elif args.crypto_prices:
+        print(json.dumps(tool_crypto_get_token_prices(args.crypto_prices), indent=2))
     else:
         # Default to running the MCP stdio server
         run_mcp_stdio_server()
