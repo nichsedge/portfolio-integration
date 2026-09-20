@@ -491,11 +491,13 @@ def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rat
         asset_classes[aclass]["value_idr"] += val_idr
         asset_classes[aclass]["count"] += 1
 
+    net_worth_idr = total_assets_idr - total_liabilities_idr
     investments_data = [item for item in all_data if str(item.get("source", "")).lower() != "sansfinance"]
     liquid_cash_accounts = [item for item in all_data if str(item.get("source", "")).lower() == "sansfinance"]
 
     investments_idr = sum(item.get("value_idr", 0.0) for item in investments_data)
     bank_cash_idr = sum(item.get("value_idr", 0.0) for item in liquid_cash_accounts)
+
 
     # Format for JSON
     snapshot = {
