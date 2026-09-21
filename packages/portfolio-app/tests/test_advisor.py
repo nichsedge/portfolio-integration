@@ -68,8 +68,16 @@ def test_get_atracker_work_hours():
     assert hours >= 0.0
 
 
-def test_generate_markdown_briefing():
+def test_generate_markdown_briefing(monkeypatch):
     advisor = PortfolioAdvisor()
+    mock_state = {
+        "macro_metrics": {"net_worth_idr": 200_000_000, "net_worth_usd": 12_500, "mom_growth_idr": 5_000_000},
+        "top_holdings": [
+            {"asset": "BBCA", "asset_class": "Equities", "value_idr": 25_000_000, "weight_pct": 12.5},
+            {"asset": "BCA Rekening", "asset_class": "Cash & Equivalents", "value_idr": 50_000_000, "weight_pct": 25.0, "category": "Bank Account"},
+        ],
+    }
+    monkeypatch.setattr(advisor, "load_portfolio_state", lambda: mock_state)
     briefing = advisor.generate_markdown_briefing()
     assert "🏛️ *Sovereign Portfolio & Market Advisor*" in briefing
     assert "Net Worth:" in briefing
