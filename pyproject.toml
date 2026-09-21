@@ -47,4 +47,7 @@ sansfinance-client = { workspace = true }
 defillama-client = { workspace = true }
 ksei = { git = "https://github.com/nichsedge/ksei.git" }
 debank-scraper = { git = "https://github.com/nichsedge/debank-scraper.git" }
-
+[tool.pytest.ini_options]
+markers = [
+    "network: marks tests that require network access",
+]
