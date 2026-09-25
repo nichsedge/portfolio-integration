@@ -25,7 +25,12 @@ def patch_dns_with_doh():
     original_getaddrinfo = socket.getaddrinfo
 
     def doh_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-        if host in ("api.binance.com", "binance.com"):
+        if isinstance(host, str) and (
+            host == "binance.com"
+            or host.endswith(".binance.com")
+            or host == "binance.vision"
+            or host.endswith(".binance.vision")
+        ):
             try:
                 url = f"https://cloudflare-dns.com/dns-query?name={urllib.parse.quote(host)}&type=A"
                 req = urllib.request.Request(url, headers={"Accept": "application/dns-json"})
