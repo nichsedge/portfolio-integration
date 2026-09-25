@@ -32,12 +32,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DB_SOURCE = REPO_ROOT / "data" / "portfolio.db"
 LOCAL_BACKUPS_DIR = REPO_ROOT / "data" / "backups"
 
-CREDS_CANDIDATES = [
-    Path.home() / "Projects" / "creds" / "cloudflare" / "r2_cred.json",
-    Path.home() / "Projects" / "sansfinance" / "app" / "src" / "main" / "assets" / "r2_cred.json",
-    Path.home() / "Projects" / "fitly" / "android" / "app" / "src" / "main" / "assets" / "r2_cred.json",
-]
-
 STATE_FILE = Path.home() / ".portfolio_sync_state.json"
 
 
@@ -48,22 +42,9 @@ def load_credentials() -> tuple[str, str, str, str]:
     bucket = os.getenv("R2_BUCKET_NAME") or R2_BUCKET
 
     if not (account_id and access_key and secret_key):
-        for candidate in CREDS_CANDIDATES:
-            if candidate.exists():
-                try:
-                    data = json.loads(candidate.read_text())
-                    account_id = account_id or data.get("account_id")
-                    access_key = access_key or data.get("access_key_id")
-                    secret_key = secret_key or data.get("secret_access_key")
-                    bucket = data.get("bucket_name") or bucket
-                    break
-                except Exception:
-                    continue
-
-    if not (account_id and access_key and secret_key):
         raise RuntimeError(
             "Cloudflare R2 credentials not found. "
-            "Export R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY or place r2_cred.json in ~/Projects/creds/cloudflare/"
+            "Export R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY in environment or .secrets."
         )
 
     return account_id, access_key, secret_key, bucket

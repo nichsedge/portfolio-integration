@@ -13,33 +13,12 @@ from typing import Dict, Optional, Tuple
 R2_DEFAULT_BUCKET = "ichsanul-dev"
 GCS_DEFAULT_BUCKET = "ichsanul-portfolio-snapshots"
 
-CRED_CANDIDATES = [
-    Path.home() / "Projects" / "creds" / "cloudflare" / "r2_cred.json",
-    Path.home() / "Projects" / "sansfinance" / "app" / "src" / "main" / "assets" / "r2_cred.json",
-]
-
-
 def load_r2_credentials() -> Tuple[Optional[str], Optional[str], Optional[str], str]:
-    """Resolve R2 credentials from env or local creds repository."""
+    """Resolve R2 credentials from environment variables."""
     account_id = os.getenv("R2_ACCOUNT_ID") or os.getenv("CLOUDFLARE_ACCOUNT_ID")
     access_key = os.getenv("R2_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
     secret_key = os.getenv("R2_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
     bucket = os.getenv("R2_BUCKET_NAME") or R2_DEFAULT_BUCKET
-
-    if not (account_id and access_key and secret_key):
-        for candidate in CRED_CANDIDATES:
-            if candidate.exists():
-                try:
-                    data = json.loads(candidate.read_text(encoding="utf-8"))
-                    account_id = account_id or data.get("account_id")
-                    access_key = access_key or data.get("access_key_id")
-                    secret_key = secret_key or data.get("secret_access_key")
-                    bucket = data.get("bucket_name") or bucket
-                    if account_id and access_key and secret_key:
-                        break
-                except Exception:
-                    continue
-
     return account_id, access_key, secret_key, bucket
 
 
