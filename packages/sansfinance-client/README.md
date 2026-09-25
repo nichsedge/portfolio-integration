@@ -13,11 +13,10 @@ uv run sansfinance-fetch
 Output: `{YYYY-MM-DD}_raw_sansfinance.json` in the pipeline data directory.
 
 ## Credentials
-
-Resolved from env (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-optional `R2_BUCKET_NAME`) or falls back to the creds bundled with the APK at
-`~/Projects/sansfinance/app/src/main/assets/r2_cred.json`. Falls back to
-`wrangler r2 object get` when direct signed download is unavailable.
+ 
+Resolved from environment variables (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+optional `R2_BUCKET_NAME`). Falls back to `wrangler r2 object get` when direct signed download
+is unavailable.
 
 ## Scope note
 

@@ -4,9 +4,8 @@ Downloads ``db/sans_finance_latest.sqlite`` from the configured R2 bucket,
 reads the latest portfolio holdings + non-investment accounts, and writes
 ``{YYYY-MM-DD}_raw_sansfinance.json`` following the pipeline convention.
 
-Credentials are resolved from (in order):
-1. Environment: R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY (/ R2_BUCKET_NAME)
-2. ``~/Projects/sansfinance/app/src/main/assets/r2_cred.json`` (the APK's bundled creds)
+Credentials are resolved from environment variables:
+R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY (/ R2_BUCKET_NAME)
 
 The wrangler CLI (``wrangler r2 object get ... --remote``) is used as a fallback
 when direct S3-signed download is unavailable.
@@ -28,33 +27,16 @@ except ImportError:
 R2_BUCKET_NAME = "ichsanul-dev"
 R2_BLOB_NAME = "db/sans_finance_latest.sqlite"
 
-CRED_CANDIDATES = [
-    Path.home() / "Projects" / "sansfinance" / "app" / "src" / "main" / "assets" / "r2_cred.json",
-]
-
 # Account types from the Sans Finance app that count toward cash net worth.
 INCLUDED_ACCOUNT_TYPES = {"Cash", "Bank Account", "P2P Lending"}
 
 
 def load_r2_credentials():
-    """Resolve R2 credentials from env or the sansfinance repo's bundled creds."""
+    """Resolve R2 credentials from environment variables."""
     account_id = os.getenv("R2_ACCOUNT_ID") or os.getenv("CLOUDFLARE_ACCOUNT_ID")
     access_key = os.getenv("R2_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
     secret_key = os.getenv("R2_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
     bucket = os.getenv("R2_BUCKET_NAME") or R2_BUCKET_NAME
-
-    if not (account_id and access_key and secret_key):
-        for candidate in CRED_CANDIDATES:
-            if candidate.exists():
-                try:
-                    data = json.loads(candidate.read_text())
-                    account_id = account_id or data.get("account_id")
-                    access_key = access_key or data.get("access_key_id")
-                    secret_key = secret_key or data.get("secret_access_key")
-                    bucket = data.get("bucket_name") or bucket
-                    break
-                except Exception:
-                    continue
     return account_id, access_key, secret_key, bucket
 
 
