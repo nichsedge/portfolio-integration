@@ -625,6 +625,26 @@ def tool_crypto_stablecoin_summary(top_n: int = 10) -> list[dict[str, Any]]:
         return client.get_stablecoins(limit=top_n)
 
 
+def tool_crypto_analyze_orderbook(
+    symbol: str = "PAXG/USDT",
+    exchange: str = "tokocrypto",
+    budget_usd: float = 50.0,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Analyze real-time exchange orderbook depth, slippage for DCA budget, bid walls, and optimal limit order entry levels."""
+    try:
+        from binance_client.orderbook import analyze_orderbook, fetch_24h_ticker, fetch_orderbook
+    except ImportError:
+        repo_root = Path(__file__).resolve().parents[4]
+        sys.path.append(str(repo_root / "packages/binance-client/src"))
+        from binance_client.orderbook import analyze_orderbook, fetch_24h_ticker, fetch_orderbook
+
+    orderbook = fetch_orderbook(symbol=symbol, exchange=exchange, limit=limit)
+    ticker = fetch_24h_ticker(symbol=symbol)
+    rate = get_exchange_rate() or 17915.0
+    return analyze_orderbook(orderbook, budget_usd=budget_usd, ticker=ticker, usd_idr_rate=rate)
+
+
 # MCP Server Definitions
 TOOLS_SCHEMA = [
     {
@@ -771,6 +791,19 @@ TOOLS_SCHEMA = [
                 "top_n": {"type": "integer", "description": "Number of top stablecoins to return (default 10)"}
             }
         }
+    },
+    {
+        "name": "crypto_analyze_orderbook",
+        "description": "Analyze real-time orderbook depth, slippage for DCA budget, bid walls, and optimal limit order entry levels for Tokocrypto and Binance.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Trading pair symbol, e.g. PAXG/USDT, XAUT/USDT (default PAXG/USDT)"},
+                "exchange": {"type": "string", "enum": ["tokocrypto", "binance"], "description": "Exchange to query (default tokocrypto)"},
+                "budget_usd": {"type": "number", "description": "DCA purchase budget in USD to simulate slippage and fees (default 50.0)"},
+                "limit": {"type": "integer", "description": "Orderbook depth levels to inspect (default 100)"}
+            }
+        }
     }
 ]
 
@@ -863,6 +896,13 @@ def run_mcp_stdio_server():
                     result = tool_crypto_audit_protocol(args.get("protocol_slug", ""))
                 elif tool_name == "crypto_stablecoin_summary":
                     result = tool_crypto_stablecoin_summary(top_n=args.get("top_n", 10))
+                elif tool_name == "crypto_analyze_orderbook":
+                    result = tool_crypto_analyze_orderbook(
+                        symbol=args.get("symbol", "PAXG/USDT"),
+                        exchange=args.get("exchange", "tokocrypto"),
+                        budget_usd=args.get("budget_usd", 50.0),
+                        limit=args.get("limit", 100),
+                    )
                 else:
                     resp = {
                         "jsonrpc": "2.0",
@@ -931,6 +971,9 @@ def main():
     parser.add_argument("--crypto-stables", action="store_true", help="Query top stablecoins by market cap via DefiLlama")
     parser.add_argument("--crypto-protocol", help="Audit protocol TVL & info via DefiLlama slug (e.g. aave-v3)")
     parser.add_argument("--crypto-prices", nargs="+", help="Query token prices via DefiLlama (e.g. coingecko:ethereum)")
+    parser.add_argument("--orderbook", nargs="?", const="PAXG/USDT", help="Analyze real-time orderbook (default: PAXG/USDT)")
+    parser.add_argument("--exchange", default="tokocrypto", choices=["tokocrypto", "binance"], help="Exchange for orderbook query")
+    parser.add_argument("--budget", type=float, default=50.0, help="DCA budget in USD (default: 50.0)")
     args = parser.parse_args()
 
     if args.mcp:
@@ -997,6 +1040,12 @@ def main():
         print(json.dumps(tool_crypto_audit_protocol(args.crypto_protocol), indent=2))
     elif args.crypto_prices:
         print(json.dumps(tool_crypto_get_token_prices(args.crypto_prices), indent=2))
+    elif args.orderbook:
+        print(json.dumps(tool_crypto_analyze_orderbook(
+            symbol=args.orderbook,
+            exchange=args.exchange,
+            budget_usd=args.budget,
+        ), indent=2))
     else:
         # Default to running the MCP stdio server
         run_mcp_stdio_server()
