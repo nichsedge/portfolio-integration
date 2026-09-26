@@ -146,7 +146,7 @@ def upsert_snapshot(
     meta = snapshot_data.get("metadata", {})
     totals = snapshot_data.get("totals", {})
     alloc = snapshot_data.get("allocation", {})
-    holdings = snapshot_data.get("holdings") or snapshot_data.get("data") or []
+    holdings = snapshot_data.get("all_holdings") or snapshot_data.get("holdings") or snapshot_data.get("data") or []
     td = meta.get("date")
     if not td:
         raise ValueError("Snapshot metadata must contain 'date'")
