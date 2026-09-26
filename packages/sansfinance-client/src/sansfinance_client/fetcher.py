@@ -31,8 +31,35 @@ R2_BLOB_NAME = "db/sans_finance_latest.sqlite"
 INCLUDED_ACCOUNT_TYPES = {"Cash", "Bank Account", "P2P Lending"}
 
 
+def _load_env_secrets() -> None:
+    candidates = [
+        Path.cwd() / ".env",
+        Path.cwd() / ".secrets",
+        Path.home() / ".secrets",
+        Path.home() / ".env",
+    ]
+    for p in candidates:
+        if p.is_file():
+            try:
+                for line in p.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("export "):
+                        line = line[7:].strip()
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+            except Exception:
+                continue
+
+
 def load_r2_credentials():
-    """Resolve R2 credentials from environment variables."""
+    """Resolve R2 credentials from environment variables or .secrets."""
+    _load_env_secrets()
     account_id = os.getenv("R2_ACCOUNT_ID") or os.getenv("CLOUDFLARE_ACCOUNT_ID")
     access_key = os.getenv("R2_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
     secret_key = os.getenv("R2_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
