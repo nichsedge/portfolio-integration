@@ -25,6 +25,7 @@ from portfolio_app.transformers.ksei_transform import clean_json
 from portfolio_app.transformers.debank_transform import extract_relevant
 from portfolio_app.ai_state_generator import build_and_save_ai_state
 from portfolio_app.data_validator import validate_holdings_and_sources, print_data_quality_report
+from portfolio_app.yield_enricher import enrich_holdings_with_yield
 from transform_core import get_data_dir, parse_usd, get_exchange_rate, FILTER_THRESHOLDS, upsert_snapshot
 
 
@@ -499,6 +500,13 @@ def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rat
     investments_idr = sum(item.get("value_idr", 0.0) for item in investments_data)
     bank_cash_idr = sum(item.get("value_idr", 0.0) for item in liquid_cash_accounts)
 
+    annual_yield_income_idr = sum(
+        float(item.get("value_idr") or 0.0) * float(item.get("yield_rate") or 0.0)
+        for item in all_data
+    )
+    weighted_yield_pct = (
+        (annual_yield_income_idr / total_assets_idr * 100.0) if total_assets_idr > 0 else 0.0
+    )
 
     # Format for JSON
     snapshot = {
@@ -517,6 +525,9 @@ def generate_snapshot_json(td: str, all_data: List[Dict[str, Any]], exchange_rat
             "investments_usd": round(investments_idr / exchange_rate, 2),
             "bank_cash_idr": round(bank_cash_idr, 2),
             "bank_cash_usd": round(bank_cash_idr / exchange_rate, 2),
+            "weighted_yield_pct": round(weighted_yield_pct, 2),
+            "annual_yield_income_idr": round(annual_yield_income_idr, 2),
+            "monthly_yield_income_idr": round(annual_yield_income_idr / 12.0, 2),
         },
         "allocation": {
             "by_category": [
@@ -598,6 +609,14 @@ def print_rich_summary(td: str, all_data: List[Dict[str, Any]], exchange_rate: f
     console.print(f"  Assets: Rp {total_assets_idr:,.0f}")
     if total_liabilities_idr > 0:
         console.print(f"  Liabilities: [red]Rp {total_liabilities_idr:,.0f}[/]")
+
+    annual_yield_income_idr = sum(
+        (item.get("value_idr") or ((item.get("value_usd") or 0.0) * exchange_rate)) * float(item.get("yield_rate") or 0.0)
+        for item in all_data
+    )
+    weighted_yield_pct = (annual_yield_income_idr / total_assets_idr * 100.0) if total_assets_idr > 0 else 0.0
+    console.print(f"  Weighted Yield: [bold magenta]{weighted_yield_pct:.2f}% APY[/] "
+                  f"([dim]Est. Passive: Rp {annual_yield_income_idr:,.0f}/yr ~ Rp {annual_yield_income_idr / 12.0:,.0f}/mo[/])")
     console.print("")
     
     # Asset Class Table
@@ -705,6 +724,9 @@ def main():
     # Add asset class to each item
     for item in all_data:
         item["asset_class"] = get_asset_class(item.get("category", "Other"))
+
+    # Enrich holdings with real annual yield rates (APY / Dividend Yield)
+    enrich_holdings_with_yield(all_data)
 
     # Fill in missing currency values using exchange rate
     for item in all_data:

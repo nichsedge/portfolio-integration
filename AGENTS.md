@@ -56,8 +56,8 @@ This is a Python monorepo managed with `uv` implementing a 4-stage ETL pipeline 
    - **Alchemy**: `packages/alchemy-client` (CLI: `alchemy-fetch`)
    - **SansFinance**: `packages/sansfinance-client` (CLI: `sansfinance-fetch`) — pulls cash & P2P accounts from the Sans Finance app DB on Cloudflare R2
 2. **Transform**: Clean and filter raw sources into curated JSON (`packages/portfolio-app/src/portfolio_app/transformers/`)
-3. **Integrate**: Merge curated sources into unified portfolio CSV and snapshot JSON (`packages/portfolio-app/src/portfolio_app/integrators/portfolio_integration.py`)
-4. **Cloud Upload & Insights**: Upload daily snapshots to Cloudflare R2 (and optional GCS) and generate AI state digests (`latest_ai_state.json` & `latest_ai_digest.md`).
+3. **Integrate & Enrich**: Merge curated sources, enrich each holding with real-world annual yields (`yield_rate` via `portfolio_app.yield_enricher`), persist to `data/portfolio.db` (SQLite SSOT), and emit unified snapshot JSON (`latest_snapshot.json`).
+4. **Cloud Upload & Insights**: Upload daily snapshots to Cloudflare R2 (`snapshots/latest.json`), push DB to R2 (`db/portfolio_latest.sqlite`), and generate AI state digests (`latest_ai_state.json` & `latest_ai_digest.md`).
 
 ### Workspace Structure
 
