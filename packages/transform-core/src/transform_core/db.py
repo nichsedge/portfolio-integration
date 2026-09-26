@@ -69,6 +69,7 @@ def init_db(conn: sqlite3.Connection | None = None) -> None:
             value_idr REAL NOT NULL,
             value_usd REAL,
             allocation_pct REAL,
+            yield_rate REAL,
             details TEXT,
             raw_json TEXT,
             FOREIGN KEY (snapshot_date) REFERENCES snapshots(date) ON DELETE CASCADE
@@ -106,6 +107,12 @@ def init_db(conn: sqlite3.Connection | None = None) -> None:
         CREATE INDEX IF NOT EXISTS idx_holdings_source ON holdings(source);
         CREATE INDEX IF NOT EXISTS idx_holdings_category ON holdings(category);
         """)
+
+        # Ensure yield_rate column exists on existing holdings tables
+        cur = conn.execute("PRAGMA table_info(holdings)")
+        cols = {row["name"] for row in cur.fetchall()}
+        if cols and "yield_rate" not in cols:
+            conn.execute("ALTER TABLE holdings ADD COLUMN yield_rate REAL;")
 
     if close_after:
         conn.close()
@@ -221,14 +228,15 @@ def upsert_snapshot(
             price = _clean_float(item.get("price_idr") if item.get("price_idr") is not None else item.get("price"))
             alloc_pct = _clean_float(item.get("allocation_percentage") if item.get("allocation_percentage") is not None else item.get("allocation_pct"))
             name = item.get("name") or item.get("asset") or item.get("ticker") or item.get("account")
+            yield_rate = _clean_float(item.get("yield_rate"))
 
             conn.execute(
                 """
                 INSERT INTO holdings (
                     snapshot_date, source, category, asset_class, ticker, name,
                     account, units, price_idr, value_idr, value_usd,
-                    allocation_pct, details, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    allocation_pct, yield_rate, details, raw_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     td,
@@ -243,6 +251,7 @@ def upsert_snapshot(
                     val_idr,
                     val_usd_f,
                     alloc_pct,
+                    yield_rate,
                     item.get("details"),
                     json.dumps(item)
                 )

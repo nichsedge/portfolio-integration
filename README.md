@@ -134,8 +134,8 @@ All portfolio data follows a standardized pipeline storing time-series and holdi
 
 1. **Extract**: Raw output saved to temporary `{YYYY-MM-DD}_raw_<source>.json`.
 2. **Transform**: Normalized and curated into `{YYYY-MM-DD}_curated_<source>.json`.
-3. **Integrate**: Upserted into `data/portfolio.db` (SQLite with WAL mode) and emitted as `latest_snapshot.json`.
-4. **Cloud & AI Digest**: Exported to `latest_ai_state.json`, `latest_ai_digest.md`, and bidirectionally synchronized with Cloudflare R2 (`db/portfolio_latest.sqlite`).
+3. **Integrate & Enrich**: Enriched with deterministic annual yield rates (`yield_rate` via `portfolio_app.yield_enricher` for SBN coupons, IDX dividends, P2P lending, and crypto staking), upserted into `data/portfolio.db` (SQLite with WAL mode), and emitted as `latest_snapshot.json`.
+4. **Cloud & AI Digest**: Exported to `latest_ai_state.json`, `latest_ai_digest.md`, and bidirectionally synchronized with Cloudflare R2 (`db/portfolio_latest.sqlite` and `snapshots/latest.json`).
 
 ### Cloudflare R2 Bidirectional Sync
 
