@@ -1,6 +1,8 @@
 [tool.uv.workspace]
 members = [
-    "packages/*",
+    "packages/assets/*",
+    "packages/market/*",
+    "packages/core/*",
     "apps/*"
 ]
 
@@ -22,6 +24,7 @@ dependencies = [
     "transform-core",
     "sansfinance-client",
     "defillama-client",
+    "reksadana-client",
     "ksei",
     "debank-scraper",
     "pendulum>=3.2.0",
@@ -45,6 +48,7 @@ alchemy-client = { workspace = true }
 transform-core = { workspace = true }
 sansfinance-client = { workspace = true }
 defillama-client = { workspace = true }
+reksadana-client = { workspace = true }
 ksei = { git = "https://github.com/nichsedge/ksei.git" }
 debank-scraper = { git = "https://github.com/nichsedge/debank-scraper.git" }
 [tool.pytest.ini_options]

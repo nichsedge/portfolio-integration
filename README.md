@@ -4,14 +4,23 @@ Unified financial portfolio ETL pipeline and Model Context Protocol (MCP) server
 
 ---
 
-## Supported Data Sources
+## Architecture & Data Categorization
 
-- **KSEI** (`ksei dump`): Indonesian Central Securities Depository equities, mutual funds, and cash balances.
-- **DeBank** (`debank-scrape`): Multi-chain EVM wallet and DeFi protocol balances.
+The pipeline strictly separates **Owned Portfolio Assets** from **Market Intelligence & Decision Support**:
+
+### 1. 💼 Personal Portfolio Holdings (What You Own)
+*Ingested into the canonical SQLite SSOT (`data/portfolio.db`), aggregated into daily net worth snapshots, and fed into iERP.*
+- **KSEI** (`ksei dump`): Indonesian Central Securities Depository equities, mutual fund units, and SBN bonds.
+- **DeBank** (`debank-scrape`): Multi-chain EVM wallet balances and active DeFi protocol positions.
 - **Binance** (`binance-fetch`): Centralized cryptocurrency exchange balances via CCXT.
 - **Alchemy** (`alchemy-fetch`): Solana SPL token and native balance tracking via Alchemy RPC.
 - **Sans Finance** (`sansfinance-fetch`): Bank cash, wallet cash, and P2P lending balances from the Sans Finance app DB (Cloudflare R2).
+
+### 2. 🧠 Market Intelligence & Decision Support (What the Market Offers)
+*Yardsticks, screeners, and benchmark feeds used exclusively by `portfolio-advisor` and `portfolio-mcp` for capital allocation decisions.*
+- **Reksa Dana Indonesia** (`reksadana-fetch` & `reksadana-screen`): Complete Indonesian mutual fund market universe (150+ funds across 17 tier-1 asset managers), live NAV, AUM, historical CAGR, Max Drawdown, Expense Ratios, and underlying holdings.
 - **DefiLlama** (`llama-fetch`): Multi-chain token prices, live yield pools, protocol counterparty audits, and stablecoin market data via 100% free unauthenticated API ([upstream LLM docs](https://api-docs.defillama.com/llms.txt)).
+- **IDX-BEI** (DuckDB / MCP): Parquet datasets for Indonesian stock fundamentals, broker accumulation/distribution, and corporate actions.
 
 ---
 
@@ -22,15 +31,21 @@ Managed with [`uv`](https://github.com/astral-sh/uv) workspace:
 ```
 portfolio-integration/
 ├── apps/
-│   └── pipeline-runner/       # Pipeline orchestrator and batch commands
+│   └── pipeline-runner/          # Pipeline orchestrator and batch ETL runner
 ├── packages/
-│   ├── alchemy-client/        # Solana token holdings fetcher
-│   ├── binance-client/        # Binance exchange client via CCXT
-│   ├── defillama-client/      # DefiLlama free API client (prices, yields, protocols, stables)
-│   ├── transform-core/        # Shared parsing and data directory utilities
-│   └── portfolio-app/         # Transformers, integrators, MCP server & AI state tools
-├── AGENTS.md                  # Guidelines for AI coding assistants
-└── pyproject.toml             # Root workspace coordinator
+│   ├── assets/                   # Personal portfolio holdings & connectors (What You Own)
+│   │   ├── alchemy-client/       # Solana SPL token & native balance fetcher
+│   │   ├── binance-client/       # Binance exchange client via CCXT
+│   │   └── sansfinance-client/   # Cash & P2P accounts fetcher from R2
+│   ├── market/                   # Market intelligence & decision support (What The Market Offers)
+│   │   ├── defillama-client/     # DefiLlama free API client (prices, yields, protocols, stables)
+│   │   └── reksadana-client/     # Indonesian mutual funds ETL and quantitative screener
+│   └── core/                     # Shared kernel & processing engines
+│       ├── transform-core/       # Shared parsing and data directory resolution utilities
+│       └── portfolio-app/        # Transformers, SQLite SSOT integrator, MCP server & Advisor
+├── data/                         # Local storage: portfolio.db, latest_snapshot.json, market_*.json
+├── AGENTS.md                     # Universal AI coding guidelines
+└── pyproject.toml                # Root uv workspace coordinator
 ```
 
 ---
@@ -95,6 +110,8 @@ uv run ksei dump        # Fetch Indonesian equities / securities
 uv run binance-fetch    # Fetch Binance balances
 uv run alchemy-fetch    # Fetch Solana balances
 uv run llama-fetch      # DefiLlama free API CLI (prices, yields, protocol, stables, fees)
+uv run reksadana-fetch  # Fetch complete Indonesian mutual funds universe (Bibit API)
+uv run reksadana-screen # Quantitative screener for Indonesian mutual funds (PU, OB, SH, CP)
 ```
 
 ### AI State & MCP Server

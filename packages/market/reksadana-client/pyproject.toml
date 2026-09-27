@@ -1,0 +1,26 @@
+[project]
+name = "reksadana-client"
+version = "0.1.0"
+description = "Indonesian Reksa Dana (Mutual Fund) ETL client and quantitative screener"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.14.7"
+dependencies = [
+    "httpx>=0.28.0",
+    "cryptography>=44.0.0",
+    "pydantic>=2.10.0",
+    "rich>=13.9.0",
+    "pendulum>=3.2.0",
+    "transform-core",
+]
+
+[tool.uv.sources]
+transform-core = { workspace = true }
+
+[project.scripts]
+reksadana-fetch = "reksadana_client.cli:fetch_main"
+reksadana-screen = "reksadana_client.cli:screen_main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.12.6"]
+build-backend = "uv_build"

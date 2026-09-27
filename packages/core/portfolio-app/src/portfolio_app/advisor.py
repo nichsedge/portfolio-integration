@@ -20,7 +20,12 @@ from rich.table import Table
 
 def get_paths() -> tuple[Path, Path]:
     """Resolve data directories for portfolio-integration and idx-bei."""
-    portfolio_root = Path(__file__).resolve().parents[4]
+    current = Path(__file__).resolve()
+    portfolio_root = current.parents[4]
+    for parent in current.parents:
+        if (parent / "pyproject.toml").is_file() and (parent / "packages").is_dir():
+            portfolio_root = parent
+            break
     idx_root = portfolio_root.parent / "idx-bei"
     return portfolio_root, idx_root
 

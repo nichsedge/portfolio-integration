@@ -10,8 +10,14 @@ from pathlib import Path
 
 import requests
 
-# Find the repo root (assumes this file is in packages/transform-core/src/transform_core/utils.py)
-REPO_ROOT = Path(__file__).resolve().parents[4]
+def _find_repo_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "pyproject.toml").is_file() and (parent / "packages").is_dir():
+            return parent
+    return current.parents[4]
+
+REPO_ROOT = _find_repo_root()
 DATA_DIR_DEFAULT = REPO_ROOT / "data"
 
 

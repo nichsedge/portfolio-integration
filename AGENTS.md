@@ -12,6 +12,7 @@ Universal guidelines for AI coding agents (Antigravity, Claude Code, Cursor, Cop
 * **Cash & P2P Intake**: Pulls cash and P2P lending balances from the `sansfinance` Android database snapshot on Cloudflare R2 (`sansfinance-fetch`).
 * **WUDAS & R2 Sync**: Adheres to the Workstation Unified Data Architecture Standard. Avoids loose dated JSON files. Emits single-leaf `latest_snapshot.json` and `latest_ai_state.json`. Syncs `portfolio.db` bidirectionally with Cloudflare R2 (`db/portfolio_latest.sqlite`) via `uv run scripts/sync_r2.py [status|push|pull|auto]`.
 * **Output to iERP**: Feeds high-level net worth and liquid cash totals into `ierp` (`events.db` `networth_snapshots`).
+* **Owned Assets vs Market Intelligence Boundary**: Strictly separate assets you own (`amount > 0` stored in `portfolio.db`) from external market intelligence / decision support feeds (`defillama-client`, `reksadana-client`, `idx-bei`). Market catalogs must NEVER be ingested into `portfolio.db` or counted toward net worth. They exist exclusively for yardsticks, screening, and quantitative recommendations in `portfolio-advisor` and `portfolio-mcp`.
 * **Boundary**: Do NOT track individual operational expenses, budgets, or cash pacing here (those belong in `sansfinance`). Do NOT track personal life events or contacts here (those belong in `ierp`).
 
 ---
@@ -26,8 +27,9 @@ When updating, debugging, or fixing a specific component or data source:
   * **Binance**: `uv run binance-fetch`
   * **Alchemy**: `uv run alchemy-fetch`
   * **SansFinance**: `uv run sansfinance-fetch`
-  * **DefiLlama**: `uv run llama-fetch <subcommand>` or `uv run pytest packages/defillama-client/tests/`
-  * **Individual Transformer**: Test only the specific transformer file (e.g. `python packages/portfolio-app/src/portfolio_app/transformers/debank_transform.py`)
+  * **DefiLlama**: `uv run llama-fetch <subcommand>` or `uv run pytest packages/market/defillama-client/tests/`
+  * **Reksa Dana**: `uv run reksadana-fetch`, `uv run reksadana-screen`, or `uv run pytest packages/market/reksadana-client/tests/`
+  * **Individual Transformer**: Test only the specific transformer file (e.g. `python packages/core/portfolio-app/src/portfolio_app/transformers/debank_transform.py`)
 
 Running the full pipeline executes cloud uploads (GCS), triggers rate-limited APIs, and spawns unnecessary browser processes. Keep tests strictly scoped to the modified component.
 
@@ -63,12 +65,16 @@ This is a Python monorepo managed with `uv` implementing a 4-stage ETL pipeline 
 
 ```
 packages/
-├── alchemy-client/   # Solana token holdings fetcher
-├── binance-client/   # Binance exchange client via CCXT
-├── defillama-client/ # DefiLlama free API client (prices, yields, protocols, stables)
-├── sansfinance-client/ # Cash & P2P accounts fetcher from R2
-├── transform-core/   # Shared utilities (data dir resolution, parsing)
-└── portfolio-app/    # Transformers, integrators, and MCP server
+├── assets/           # Personal portfolio holdings & connectors (What You Own)
+│   ├── alchemy-client/   # Solana token holdings fetcher
+│   ├── binance-client/   # Binance exchange client via CCXT
+│   └── sansfinance-client/ # Cash & P2P accounts fetcher from R2
+├── market/           # Market intelligence & decision support (What The Market Offers)
+│   ├── defillama-client/ # DefiLlama free API client (prices, yields, protocols, stables)
+│   └── reksadana-client/ # Indonesian mutual funds ETL and quantitative screener
+└── core/             # Shared kernel & processing engines
+    ├── transform-core/   # Shared utilities (data dir resolution, parsing)
+    └── portfolio-app/    # Transformers, integrators, and MCP server
 
 apps/
 └── pipeline-runner/  # Main pipeline orchestrator
@@ -94,6 +100,8 @@ uv run binance-fetch
 uv run alchemy-fetch
 uv run sansfinance-fetch
 uv run llama-fetch prices "coingecko:ethereum"   # DefiLlama free API CLI
+uv run reksadana-fetch                           # Fetch all Indonesian mutual funds (Bibit API)
+uv run reksadana-screen --type pasar_uang        # Screen top Indonesian mutual funds
 
 # Full pipeline options (Only run when explicitly requested)
 uv run run-all         # Full pipeline: fetch + transform + integrate + GCS upload

@@ -25,7 +25,9 @@ load_dotenv()
 
 # Add packages to path for imports
 repo_root = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(repo_root / "packages"))
+sys.path.insert(0, str(repo_root / "packages/core"))
+sys.path.insert(0, str(repo_root / "packages/assets"))
+sys.path.insert(0, str(repo_root / "packages/market"))
 
 
 def _run_blocking_step(name: str, pkg_path: str, command: list[str], verbose: bool = False) -> bool:
@@ -205,14 +207,14 @@ def main():
             "DeBank", str(repo_root), ["uv", "run", "debank-scrape", "--output", str(data_dir)]
         )
         
-        binance_path = repo_root / "packages/binance-client"
+        binance_path = repo_root / "packages/assets/binance-client"
         processes["Binance"] = _start_non_blocking_step("Binance", str(binance_path), ["uv", "run", "binance-fetch"])
         
-        alchemy_path = repo_root / "packages/alchemy-client"
+        alchemy_path = repo_root / "packages/assets/alchemy-client"
         if alchemy_path.exists():
             processes["Alchemy"] = _start_non_blocking_step("Alchemy", str(alchemy_path), ["uv", "run", "alchemy-fetch"])
 
-        sansfinance_path = repo_root / "packages/sansfinance-client"
+        sansfinance_path = repo_root / "packages/assets/sansfinance-client"
         if sansfinance_path.exists():
             processes["SansFinance"] = _start_non_blocking_step("SansFinance", str(sansfinance_path), ["uv", "run", "sansfinance-fetch"])
 
@@ -256,7 +258,7 @@ def main():
             dates_to_process = sorted(list(found_dates))
             print(f"Found {len(dates_to_process)} dates to process: {', '.join(dates_to_process)}")
 
-        portfolio_app_path = repo_root / "packages/portfolio-app"
+        portfolio_app_path = repo_root / "packages/core/portfolio-app"
 
         for current_date in dates_to_process:
             print(f"\nProcessing date: {current_date}")
