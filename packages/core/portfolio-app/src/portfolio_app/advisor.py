@@ -613,6 +613,12 @@ class PortfolioAdvisor:
             self.console.print(opp_table)
 
         # 4. Actionable Lazy Decision Card
+        adhd_metrics = state.get("adhd_focus_metrics", {})
+        playbook = adhd_metrics.get("sbn_reinvestment_playbook", {})
+        clutter = adhd_metrics.get("clutter_audit", {})
+        vault = adhd_metrics.get("vault_summary", {})
+        router = adhd_metrics.get("deposit_router", {})
+
         recommendation_panel = (
             "[bold white]1. Sovereign Runway & Dry Powder Allocation:[/bold white]\n"
             f"   • {allocation_plan['tactical_advice']}\n"
@@ -631,6 +637,49 @@ class PortfolioAdvisor:
                 recommendation_panel,
                 title="⚡ Lazy Investor Actionable Verdict",
                 border_style="bright_blue",
+            )
+        )
+
+        # 5. SBN Maturity Playbook Alert (if upcoming)
+        if playbook.get("has_upcoming_maturity"):
+            steps = "\n".join([f"   • {s}" for s in playbook.get("action_plan", [])])
+            playbook_text = (
+                f"[bold yellow]Maturing Asset:[/bold yellow] [bold white]{playbook['maturing_asset']}[/bold white] "
+                f"(Rp {playbook['principal_idr']:,.0f}) matures on [bold cyan]{playbook['maturity_date']}[/bold cyan] ({playbook['days_left']} days left).\n"
+                f"[bold red]Lost Coupon Flow:[/bold red] -Rp {playbook['lost_monthly_idr']:,.0f}/mo net upon maturity.\n"
+                f"[bold green]Pre-Committed Autopilot Plan:[/bold green]\n{steps}"
+            )
+            self.console.print(
+                Panel(
+                    playbook_text,
+                    title="🎯 Autopilot SBN Reinvestment Playbook (Decision Fatigue Shield)",
+                    border_style="bright_yellow",
+                )
+            )
+
+        # 6. ADHD Clutter Sweeper & Dust Audit
+        clutter_directives = (
+            "\n".join([f"   • {d}" for d in clutter.get("directives", [])])
+            if clutter.get("directives")
+            else "   • All holdings >1% weight. Zero dust detected. Clean portfolio."
+        )
+        clutter_text = (
+            f"[bold cyan]Portfolio Clutter Score:[/bold cyan] [bold white]{clutter.get('clutter_score', 100):.0f}/100[/bold white] "
+            f"({clutter.get('clutter_rating', 'Clean')})\n"
+            f"[bold magenta]Fragmented Micro-Holdings:[/bold magenta] {clutter.get('fragmented_count', 0)} assets totaling "
+            f"Rp {clutter.get('fragmented_total_idr', 0):,.0f} ({clutter.get('fragmented_weight_pct', 0.0):.1f}% of portfolio)\n"
+            f"[bold yellow]One-Step Cleaning Directives:[/bold yellow]\n{clutter_directives}"
+        )
+        if router.get("one_step_action"):
+            clutter_text += f"\n\n[bold green]⚡ Zero-Brain Next DCA Step:[/bold green] {router['one_step_action']}"
+        if vault.get("calmness_directive"):
+            clutter_text += f"\n[bold blue]🧘 Autonomous Lockbox:[/bold blue] {vault['calmness_directive']}"
+
+        self.console.print(
+            Panel(
+                clutter_text,
+                title="🧹 ADHD Asset Clutter & Focus Optimizer",
+                border_style="bright_magenta",
             )
         )
 
@@ -661,12 +710,24 @@ class PortfolioAdvisor:
             float(total_cash_idr), float(runway.get("monthly_burn", 0.0))
         )
 
+        adhd_metrics = state.get("adhd_focus_metrics", {})
+        playbook = adhd_metrics.get("sbn_reinvestment_playbook", {})
+        clutter = adhd_metrics.get("clutter_audit", {})
+        vault = adhd_metrics.get("vault_summary", {})
+        router = adhd_metrics.get("deposit_router", {})
+
         lines = [
             "🏛️ *Sovereign Portfolio & Market Advisor*",
             f"• *Net Worth:* Rp {net_worth_idr:,.0f} (~${macro.get('net_worth_usd', 0):,.0f} USD)",
             f"• *Dry Powder (Liquid):* Rp {total_cash_idr:,.0f} ({cash_pct:.1f}% of NW)",
             f"• *Zero-Income Runway:* {runway['runway_months']} Months ({runway['status']})",
             f"• *Work Velocity (30d):* {work_hours_30d:.1f} hrs ({velocity_str})",
+        ]
+
+        if vault.get("calmness_directive"):
+            lines.append(f"• *Autonomous Vault:* {vault['calmness_directive']}")
+
+        lines.extend([
             "",
             "🛡️ *Sovereign Runway 3-Tier Allocation:*",
             f"• *Tier 1 (Base 0-12m):* Rp {allocation_plan['tier1_operating_reserve']['allocated_idr']:,.0f} (Ultra-Liquid Yield)",
@@ -674,7 +735,7 @@ class PortfolioAdvisor:
             f"• *Tier 3 (Deployable Surplus >24m):* Rp {allocation_plan['tier3_deployable_surplus']['allocated_idr']:,.0f} (Alpha Compounders)",
             "",
             "📈 *Equity Holdings Multi-Cycle Verdicts:*",
-        ]
+        ])
 
         equity_analysis = self.analyze_equity_holdings(holdings)
         for r in equity_analysis:
@@ -695,6 +756,31 @@ class PortfolioAdvisor:
                 f"ROE {o['roe']:.1f}%, PER {o['per']:.1f}x | RSI {o.get('rsi14', 50.0):.0f} ({o.get('entry_zone', 'ACCUMULATE')}) | "
                 f"Flow: +{o['nff_20d']/1e6:.1f}M"
             )
+
+        if playbook.get("has_upcoming_maturity"):
+            lines.extend([
+                "",
+                "🎯 *Autopilot SBN Reinvestment Playbook:*",
+                f"• Maturing: {playbook['maturing_asset']} (Rp {playbook['principal_idr']:,.0f}) on {playbook['maturity_date']} ({playbook['days_left']}d left)",
+                f"• Lost Coupon: -Rp {playbook['lost_monthly_idr']:,.0f}/mo net",
+            ])
+            for step in playbook.get("action_plan", []):
+                lines.append(f"  → {step}")
+
+        if clutter.get("directives"):
+            lines.extend([
+                "",
+                f"🧹 *ADHD Clutter Sweeper ({clutter.get('clutter_score', 100):.0f}/100 - {clutter.get('clutter_rating', 'Clean')}):*",
+                f"• {clutter.get('fragmented_count', 0)} micro-assets totaling Rp {clutter.get('fragmented_total_idr', 0):,.0f} ({clutter.get('fragmented_weight_pct', 0.0):.1f}% NW)",
+            ])
+            for d in clutter.get("directives", []):
+                lines.append(f"  → {d}")
+
+        if router.get("one_step_action"):
+            lines.extend([
+                "",
+                f"⚡ *Zero-Brain Next Action:* {router['one_step_action']}",
+            ])
 
         lines.extend([
             "",
@@ -731,6 +817,12 @@ class PortfolioAdvisor:
 
         equity_analysis = self.analyze_equity_holdings(holdings)
         opportunities = self.screen_dry_powder_opportunities(limit=3)
+
+        adhd_metrics = state.get("adhd_focus_metrics", {})
+        clutter_audit = adhd_metrics.get("clutter_audit", {})
+        reinvestment_playbook = adhd_metrics.get("sbn_reinvestment_playbook", {})
+        vault_summary = adhd_metrics.get("vault_summary", {})
+        deposit_router = adhd_metrics.get("deposit_router", {})
 
         return {
             "date": state.get("state_date", ""),
@@ -783,6 +875,10 @@ class PortfolioAdvisor:
                 }
                 for o in opportunities
             ],
+            "clutter_audit": clutter_audit,
+            "reinvestment_playbook": reinvestment_playbook,
+            "vault_summary": vault_summary,
+            "deposit_router": deposit_router,
         }
 
     def save_latest(self) -> Path:

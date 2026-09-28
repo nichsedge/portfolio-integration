@@ -4,16 +4,16 @@ Exposes standardized tools for AI agents (Hermes Agent, Claude, Cursor, Goose, L
 Supports stdio MCP JSON-RPC 2.0 protocol and direct CLI execution.
 """
 
-import sys
 import json
-import os
+import sys
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 # Setup imports
 try:
-    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot
     from defillama_client import DefiLlamaClient
+    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot
+
     from portfolio_app.ai_state_generator import (
         build_and_save_ai_state,
         generate_ai_digest_markdown,
@@ -25,24 +25,23 @@ except ImportError:
     sys.path.append(str(repo_root / "packages/portfolio-app/src"))
     sys.path.append(str(repo_root / "packages/transform-core/src"))
     sys.path.append(str(repo_root / "packages/defillama-client/src"))
-    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot
     from defillama_client import DefiLlamaClient
+    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot
+
     from portfolio_app.ai_state_generator import (
-        build_and_save_ai_state,
-        generate_ai_digest_markdown,
         generate_ai_state,
         load_historical_snapshots,
     )
 
 
-def get_latest_snapshot_path() -> Optional[Path]:
+def get_latest_snapshot_path() -> Path | None:
     """Find the most recent snapshot file."""
     data_dir = get_data_dir()
     snapshots = sorted([f for f in data_dir.glob("*_snapshot.json") if not f.name.startswith("latest")])
     return snapshots[-1] if snapshots else None
 
 
-def resolve_snapshot(date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def resolve_snapshot(date: str | None = None) -> dict[str, Any] | None:
     """Resolve snapshot from portfolio.db SSOT, with fallback to latest_snapshot.json or legacy files."""
     try:
         snap = get_full_snapshot(date=date if date != "latest" else None)
@@ -76,7 +75,7 @@ def resolve_snapshot(date: Optional[str] = None) -> Optional[Dict[str, Any]]:
     return None
 
 
-def tool_get_portfolio_overview(date: Optional[str] = None) -> Dict[str, Any]:
+def tool_get_portfolio_overview(date: str | None = None) -> dict[str, Any]:
     """
     Returns the high-level financial overview: Net worth, MoM growth, asset class allocation, and liquidity.
     """
@@ -99,10 +98,10 @@ def tool_get_portfolio_overview(date: Optional[str] = None) -> Dict[str, Any]:
 
 
 def tool_get_holdings_breakdown(
-    asset_class: Optional[str] = None,
+    asset_class: str | None = None,
     min_value_usd: float = 0.0,
-    date: Optional[str] = None
-) -> List[Dict[str, Any]]:
+    date: str | None = None
+) -> list[dict[str, Any]]:
     """
     Returns individual holdings filtered by asset class or minimum USD value.
     """
@@ -141,7 +140,7 @@ def tool_get_holdings_breakdown(
     return filtered
 
 
-def tool_get_historical_performance(months: int = 6) -> List[Dict[str, Any]]:
+def tool_get_historical_performance(months: int = 6) -> list[dict[str, Any]]:
     """
     Returns the multi-month trajectory of pure portfolio investments and True Net Worth (with reconstructed cash).
     """
@@ -152,7 +151,10 @@ def tool_get_historical_performance(months: int = 6) -> List[Dict[str, Any]]:
 
     recent = all_snapshots[-months:]
 
-    from portfolio_app.cashflow_analyzer import resolve_sans_finance_db, reconstruct_historical_net_worth
+    from portfolio_app.cashflow_analyzer import (
+        reconstruct_historical_net_worth,
+        resolve_sans_finance_db,
+    )
     db_path = resolve_sans_finance_db(data_dir=data_dir, auto_pull_gcs=False)
     reconstructed_map = {}
     if db_path and db_path.exists():
@@ -191,15 +193,15 @@ def tool_get_historical_performance(months: int = 6) -> List[Dict[str, Any]]:
     return history
 
 
-def tool_get_cashflow_analysis(months: int = 3) -> Dict[str, Any]:
+def tool_get_cashflow_analysis(months: int = 3) -> dict[str, Any]:
     """
     Returns monthly cashflow metrics from Sans Finance: income, expenses, net savings,
     burn rate, and category breakdowns.
     """
     from portfolio_app.cashflow_analyzer import (
-        resolve_sans_finance_db,
         get_cashflow_metrics,
         get_live_accounts,
+        resolve_sans_finance_db,
     )
     data_dir = get_data_dir()
     db_path = resolve_sans_finance_db(data_dir=data_dir, auto_pull_gcs=True)
@@ -218,16 +220,16 @@ def tool_get_cashflow_analysis(months: int = 3) -> Dict[str, Any]:
     }
 
 
-def tool_get_unified_financial_state() -> Dict[str, Any]:
+def tool_get_unified_financial_state() -> dict[str, Any]:
     """
     Combines investment portfolio (stocks, crypto, defi, fixed income) with live cashflow,
     bank account balances, and emergency runway from Sans Finance.
     """
     from portfolio_app.cashflow_analyzer import (
-        resolve_sans_finance_db,
+        calculate_runway,
         get_cashflow_metrics,
         get_live_accounts,
-        calculate_runway,
+        resolve_sans_finance_db,
     )
     overview = tool_get_portfolio_overview()
     if "error" in overview:
@@ -278,7 +280,7 @@ def tool_get_unified_financial_state() -> Dict[str, Any]:
     }
 
 
-def tool_get_rebalancing_plan(monthly_deposit_idr: float = 5_000_000.0) -> Dict[str, Any]:
+def tool_get_rebalancing_plan(monthly_deposit_idr: float = 5_000_000.0) -> dict[str, Any]:
     """
     Calculates a deposit-only rebalancing plan to allocate new cash across underweight
     asset classes (Fixed Income, Equities, Crypto, Commodities) without selling existing assets.
@@ -305,13 +307,16 @@ def tool_get_rebalancing_plan(monthly_deposit_idr: float = 5_000_000.0) -> Dict[
     }
 
 
-def tool_get_passive_income_projection() -> Dict[str, Any]:
+def tool_get_passive_income_projection() -> dict[str, Any]:
     """
     Calculates projected annual and monthly passive cashflow from SBN coupons, stock dividends,
     and crypto staking rewards, and compares against monthly living burn rate.
     """
     from portfolio_app.ai_state_generator import calculate_passive_income
-    from portfolio_app.cashflow_analyzer import resolve_sans_finance_db, get_cashflow_metrics
+    from portfolio_app.cashflow_analyzer import (
+        get_cashflow_metrics,
+        resolve_sans_finance_db,
+    )
 
     overview = tool_get_portfolio_overview()
     if "error" in overview:
@@ -338,18 +343,22 @@ def tool_get_passive_income_projection() -> Dict[str, Any]:
 
 
 def tool_get_fire_simulation(
-    target_annual_spending_idr: Optional[float] = None,
+    target_annual_spending_idr: float | None = None,
     expected_real_return_pct: float = 6.0,
     safe_withdrawal_rate_pct: float = 4.0,
     current_age: int = 30,
     target_retirement_age: int = 55
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Simulates Financial Independence / Retire Early (FIRE) milestones, Coast FIRE,
     and projected timeline using current net worth and cashflow burn rate.
     """
     from portfolio_app.ai_state_generator import calculate_fire_simulation
-    from portfolio_app.cashflow_analyzer import resolve_sans_finance_db, get_cashflow_metrics, get_live_accounts
+    from portfolio_app.cashflow_analyzer import (
+        get_cashflow_metrics,
+        get_live_accounts,
+        resolve_sans_finance_db,
+    )
 
     overview = tool_get_portfolio_overview()
     if "error" in overview:
@@ -394,7 +403,7 @@ def tool_get_fire_simulation(
     }
 
 
-def tool_get_tax_efficiency_audit() -> Dict[str, Any]:
+def tool_get_tax_efficiency_audit() -> dict[str, Any]:
     """
     Audits Indonesian tax treatment (PPh Final, Exemptions, Reinvestment benefits) across portfolio holdings.
     """
@@ -414,12 +423,16 @@ def tool_get_tax_efficiency_audit() -> Dict[str, Any]:
     }
 
 
-def tool_get_scenario_stress_test() -> Dict[str, Any]:
+def tool_get_scenario_stress_test() -> dict[str, Any]:
     """
     Simulates macroeconomic crisis stress test (Market Crash, Currency Devaluation, Zero Income, Stagflation).
     """
+    from portfolio_app.cashflow_analyzer import (
+        get_cashflow_metrics,
+        get_live_accounts,
+        resolve_sans_finance_db,
+    )
     from portfolio_app.scenario_stress_tester import run_stress_test
-    from portfolio_app.cashflow_analyzer import resolve_sans_finance_db, get_cashflow_metrics, get_live_accounts
 
     overview = tool_get_portfolio_overview()
     if "error" in overview:
@@ -457,7 +470,7 @@ def tool_get_scenario_stress_test() -> Dict[str, Any]:
     }
 
 
-def tool_get_portfolio_health_audit() -> Dict[str, Any]:
+def tool_get_portfolio_health_audit() -> dict[str, Any]:
     """
     Performs an automated financial health audit: checks allocation drift, single-asset concentration risk,
     currency risk, liquidity runway, and generates strategic advisory recommendations.
@@ -493,7 +506,9 @@ def tool_get_portfolio_health_audit() -> Dict[str, Any]:
     # 1.5. SBN Maturity & Reinvestment Audit
     sbn_maturity_alerts = []
     try:
-        from portfolio_app.ai_state_generator import calculate_sukuk_and_dividend_schedule
+        from portfolio_app.ai_state_generator import (
+            calculate_sukuk_and_dividend_schedule,
+        )
         holdings = tool_get_holdings_breakdown()
         fx_rate = overview.get("exchange_rate_usd_idr") or 16000.0
         sukuk_data = calculate_sukuk_and_dividend_schedule(holdings, fx_rate, current_date_str=overview.get("date", ""))
@@ -527,10 +542,10 @@ def tool_get_portfolio_health_audit() -> Dict[str, Any]:
     # 4. Cashflow & Runway Audit (if DB available)
     try:
         from portfolio_app.cashflow_analyzer import (
-            resolve_sans_finance_db,
+            calculate_runway,
             get_cashflow_metrics,
             get_live_accounts,
-            calculate_runway,
+            resolve_sans_finance_db,
         )
         db_path = resolve_sans_finance_db(data_dir=get_data_dir(), auto_pull_gcs=False)
         if db_path and db_path.exists():
@@ -552,6 +567,42 @@ def tool_get_portfolio_health_audit() -> Dict[str, Any]:
     except Exception:
         pass
 
+    # 5. ADHD Simplicity & Focus Suite
+    adhd_focus = {}
+    try:
+        from portfolio_app.ai_state_generator import (
+            calculate_clutter_and_dust_audit,
+            calculate_deposit_router,
+            calculate_sbn_reinvestment_playbook,
+            calculate_vault_lockbox_summary,
+        )
+        holdings = tool_get_holdings_breakdown()
+        fx_rate = overview.get("exchange_rate_usd_idr") or 16000.0
+        tot_assets = macro.get("total_assets_idr", macro.get("net_worth_idr", 0.0))
+        reb_plan = tool_get_rebalancing_plan()
+        clutter = calculate_clutter_and_dust_audit(holdings, tot_assets, fx_rate)
+        sukuk_sched = sukuk_data if "sukuk_data" in locals() else calculate_sukuk_and_dividend_schedule(holdings, fx_rate, current_date_str=overview.get("date", ""))
+        playbook = calculate_sbn_reinvestment_playbook(sukuk_sched, allocations, tot_assets)
+        vault = calculate_vault_lockbox_summary(holdings, tot_assets, fx_rate)
+        router = calculate_deposit_router(reb_plan)
+
+        adhd_focus = {
+            "clutter_score": clutter.get("clutter_score"),
+            "clutter_rating": clutter.get("clutter_rating"),
+            "fragmented_micro_holdings_count": clutter.get("fragmented_count"),
+            "consolidation_directives": clutter.get("directives"),
+            "next_dca_step": router.get("one_step_action"),
+            "autonomous_vault_summary": vault.get("calmness_directive"),
+            "sbn_reinvestment_playbook": playbook if playbook.get("has_upcoming_maturity") else None,
+        }
+        if clutter.get("directives"):
+            for d in clutter["directives"]:
+                recommendations.append(f"Clutter Directive: {d}")
+        if router.get("one_step_action"):
+            recommendations.append(f"Zero-Brain Action: {router['one_step_action']}")
+    except Exception:
+        pass
+
     return {
         "status": "HEALTH_CHECK_COMPLETE",
         "date": overview["date"],
@@ -565,11 +616,37 @@ def tool_get_portfolio_health_audit() -> Dict[str, Any]:
         ],
         "drift_alerts": drift_alerts,
         "sbn_maturity_alerts": sbn_maturity_alerts,
+        "adhd_focus_metrics": adhd_focus,
         "advisory_recommendations": recommendations,
     }
 
 
-def tool_get_upcoming_cashflow() -> Dict[str, Any]:
+def tool_get_adhd_action_card(date: str | None = None) -> dict[str, Any]:
+    """
+    Get a zero-deliberation, ADHD-optimized one-step action card.
+    Includes unambiguous next DCA target, micro-holding dust sweeping directives,
+    upcoming SBN rollover actions, and calmness directive for locked vaults.
+    """
+    snapshot = resolve_snapshot(date)
+    if not snapshot:
+        return {"error": f"Snapshot not found for date: {date or 'latest'}"}
+
+    data_dir = get_data_dir()
+    all_snapshots = load_historical_snapshots(data_dir)
+    state = generate_ai_state(snapshot, all_snapshots)
+    adhd = state.get("adhd_focus_metrics", {})
+    return {
+        "date": state["state_date"],
+        "exchange_rate": state["exchange_rate"],
+        "zero_brain_next_action": adhd.get("deposit_router", {}).get("one_step_action"),
+        "clutter_audit": adhd.get("clutter_audit"),
+        "sbn_reinvestment_playbook": adhd.get("sbn_reinvestment_playbook"),
+        "vault_summary": adhd.get("vault_summary"),
+        "deposit_router": adhd.get("deposit_router"),
+    }
+
+
+def tool_get_upcoming_cashflow() -> dict[str, Any]:
     """
     Get schedule of upcoming fixed-income cashflow: monthly Sukuk SBN coupon payouts (paid on the 10th of every month).
     """
@@ -633,11 +710,19 @@ def tool_crypto_analyze_orderbook(
 ) -> dict[str, Any]:
     """Analyze real-time exchange orderbook depth, slippage for DCA budget, bid walls, and optimal limit order entry levels."""
     try:
-        from binance_client.orderbook import analyze_orderbook, fetch_24h_ticker, fetch_orderbook
+        from binance_client.orderbook import (
+            analyze_orderbook,
+            fetch_24h_ticker,
+            fetch_orderbook,
+        )
     except ImportError:
         repo_root = Path(__file__).resolve().parents[4]
         sys.path.append(str(repo_root / "packages/binance-client/src"))
-        from binance_client.orderbook import analyze_orderbook, fetch_24h_ticker, fetch_orderbook
+        from binance_client.orderbook import (
+            analyze_orderbook,
+            fetch_24h_ticker,
+            fetch_orderbook,
+        )
 
     orderbook = fetch_orderbook(symbol=symbol, exchange=exchange, limit=limit)
     ticker = fetch_24h_ticker(symbol=symbol)
@@ -683,6 +768,16 @@ TOOLS_SCHEMA = [
         "name": "get_portfolio_health_audit",
         "description": "Run an automated comprehensive financial health check: evaluates allocation drift, concentration risk, liquidity runway, and returns advisory recommendations.",
         "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "get_adhd_action_card",
+        "description": "Get a zero-deliberation, ADHD-optimized one-step action card: unambiguous next DCA target, micro-holding dust sweeping directives, upcoming SBN rollover actions, and calmness directive.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "Optional snapshot date (YYYY-MM-DD). Defaults to latest."}
+            }
+        }
     },
     {
         "name": "get_cashflow_analysis",
@@ -860,6 +955,8 @@ def run_mcp_stdio_server():
                     result = tool_get_historical_performance(args.get("months", 6))
                 elif tool_name == "get_portfolio_health_audit":
                     result = tool_get_portfolio_health_audit()
+                elif tool_name == "get_adhd_action_card":
+                    result = tool_get_adhd_action_card(args.get("date"))
                 elif tool_name == "get_cashflow_analysis":
                     result = tool_get_cashflow_analysis(args.get("months", 3))
                 elif tool_name == "get_unified_financial_state":
@@ -951,6 +1048,7 @@ def main():
     parser.add_argument("--mcp", action="store_true", help="Run as stdio MCP JSON-RPC Server (default when no action specified)")
     parser.add_argument("--dashboard", action="store_true", help="Launch executive visual terminal dashboard")
     parser.add_argument("--audit", action="store_true", help="Run and print portfolio health audit")
+    parser.add_argument("--adhd", "--action-card", dest="adhd", action="store_true", help="Print ADHD focus action card (deposit router, dust sweeping, rollover playbook)")
     parser.add_argument("--unified", action="store_true", help="Print unified 360° financial state (portfolio + cashflow)")
     parser.add_argument("--cashflow", action="store_true", help="Print cashflow analysis from Sans Finance")
     parser.add_argument("--rebalance", action="store_true", help="Print deposit-only portfolio rebalancing plan")
@@ -984,8 +1082,11 @@ def main():
         from portfolio_app.dashboard import render_dashboard
         render_dashboard()
     elif args.prune:
-        from portfolio_app.snapshot_pruner import prune_local_files, prune_sqlite_snapshots
         from portfolio_app.cashflow_analyzer import resolve_sans_finance_db
+        from portfolio_app.snapshot_pruner import (
+            prune_local_files,
+            prune_sqlite_snapshots,
+        )
         apply = args.apply_prune
         data_dir = get_data_dir()
         db_path = resolve_sans_finance_db(data_dir=data_dir, auto_pull_gcs=False)
@@ -1013,6 +1114,9 @@ def main():
         print(json.dumps(tool_get_scenario_stress_test(), indent=2))
     elif args.audit:
         result = tool_get_portfolio_health_audit()
+        print(json.dumps(result, indent=2))
+    elif args.adhd:
+        result = tool_get_adhd_action_card()
         print(json.dumps(result, indent=2))
     elif args.digest:
         latest_md = get_data_dir() / "latest_ai_digest.md"

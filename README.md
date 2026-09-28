@@ -131,6 +131,9 @@ uv run portfolio-mcp --json
 # Run automated portfolio health check
 uv run portfolio-mcp --audit
 
+# Output zero-friction ADHD action card (DCA target, dust cleaning, SBN rollover)
+uv run portfolio-mcp --adhd
+
 # Regenerate latest AI state and digest directly
 uv run portfolio-ai-state
 
@@ -140,8 +143,17 @@ uv run portfolio-dashboard
 # Run quantitative portfolio advisor & 3-tier sovereign runway matrix (integrates with idx-bei)
 uv run portfolio-advisor
 uv run portfolio-advisor --markdown   # Clean Markdown brief for Telegram/cron
-uv run portfolio-advisor --json       # Structured payload for downstream consumers
+uv run portfolio-advisor --json       # Structured payload for downstream consumers (SansFinance / iERP)
 ```
+
+### ADHD Focus & Cognitive Simplicity Suite
+
+Built into `portfolio-advisor`, `portfolio-ai-state`, and `portfolio-mcp` to eliminate analysis paralysis and cognitive overload:
+- **🧹 Clutter & Dust Sweeper Audit**: Detects fragmented micro-holdings (<1% of NW or <Rp 3M) across multiple brokerages/wallets, calculates a 0-100 Cognitive Clutter Score, and provides 1-step sweeping instructions.
+- **🎯 Autopilot SBN Reinvestment Playbook**: Flags maturing Sukuk/SBN series (e.g. ST013T2 Rp 61M in November 2026), quantifies lost monthly cashflow, and pre-commits an exact rebalancing allocation split.
+- **⚡ Zero-Brain Deposit Router**: Replaces complex allocation math with a single, unambiguous next action (e.g. *"Deposit Rp 5,000,000 into Equities (Stockbit -> SRI-KEHATI). Zero debate."*).
+- **🧘 Autonomous Vault vs Actionable Wealth**: Classifies locked compounding assets (state Sukuk) into an autonomous layer, reassuring the user that ~47% of their wealth is compounding on autopilot.
+
 
 ---
 

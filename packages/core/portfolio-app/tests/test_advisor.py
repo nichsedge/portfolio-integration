@@ -145,4 +145,8 @@ def test_get_advisor_payload_sovereign():
     for o in payload["opportunities"]:
         assert "rsi14" in o
         assert "entry_zone" in o
+    assert "clutter_audit" in payload
+    assert "reinvestment_playbook" in payload
+    assert "vault_summary" in payload
+    assert "deposit_router" in payload
 

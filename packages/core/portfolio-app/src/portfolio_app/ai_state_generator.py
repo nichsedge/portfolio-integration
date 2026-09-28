@@ -5,20 +5,29 @@ optimized for ingestion by Agentic AI systems (Hermes Agent, Claude, GPT, MCP to
 """
 
 import json
-import os
-import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 import pendulum
 
 # Import utils
 try:
-    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot, upsert_ai_state
+    from transform_core import (
+        get_data_dir,
+        get_exchange_rate,
+        get_full_snapshot,
+        upsert_ai_state,
+    )
 except ImportError:
     repo_root = Path(__file__).resolve().parents[4]
     import sys
     sys.path.append(str(repo_root / "packages/transform-core/src"))
-    from transform_core import get_data_dir, get_exchange_rate, get_full_snapshot, upsert_ai_state
+    from transform_core import (
+        get_data_dir,
+        get_exchange_rate,
+        get_full_snapshot,
+        upsert_ai_state,
+    )
 
 
 
@@ -42,12 +51,12 @@ ASSET_CLASS_YIELD_BENCHMARKS = {
 
 
 def calculate_passive_income(
-    holdings: List[Dict[str, Any]],
+    holdings: list[dict[str, Any]],
     exchange_rate: float,
-    monthly_burn_idr: Optional[float] = None
-) -> Dict[str, Any]:
+    monthly_burn_idr: float | None = None
+) -> dict[str, Any]:
     """Calculates estimated annual and monthly passive cashflow from holdings."""
-    breakdown: Dict[str, Dict[str, float]] = {
+    breakdown: dict[str, dict[str, float]] = {
         aclass: {"value_idr": 0.0, "annual_yield_idr": 0.0, "yield_rate": rate}
         for aclass, rate in ASSET_CLASS_YIELD_BENCHMARKS.items()
     }
@@ -113,10 +122,10 @@ def calculate_passive_income(
 
 
 def calculate_sukuk_and_dividend_schedule(
-    holdings: List[Dict[str, Any]],
+    holdings: list[dict[str, Any]],
     exchange_rate: float,
     current_date_str: str = ""
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Computes upcoming monthly coupon schedule and maturity horizon for SBN Sukuk / Corporate Bonds.
     SBN Sukuk (ST010, ST012, ST013, ST014, etc.) pays fixed/floating coupons monthly on the 10th.
@@ -217,9 +226,9 @@ def calculate_sukuk_and_dividend_schedule(
 
 
 def calculate_attribution_analysis(
-    current_snapshot: Dict[str, Any],
-    all_snapshots: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+    current_snapshot: dict[str, Any],
+    all_snapshots: list[dict[str, Any]]
+) -> dict[str, Any]:
     """
     Calculates period-over-period net worth growth attribution,
     separating market appreciation from cash/savings changes.
@@ -267,12 +276,12 @@ def calculate_attribution_analysis(
 
 
 def calculate_rebalancing_orders(
-    holdings: List[Dict[str, Any]],
+    holdings: list[dict[str, Any]],
     total_assets_idr: float,
     exchange_rate: float,
     monthly_deposit_idr: float = 5_000_000.0,
-    target_allocation: Optional[Dict[str, float]] = None
-) -> Dict[str, Any]:
+    target_allocation: dict[str, float] | None = None
+) -> dict[str, Any]:
     """Calculates deposit-only rebalancing allocations to correct underweight asset classes."""
     if target_allocation is None:
         target_allocation = DEFAULT_TARGET_ALLOCATION
@@ -283,7 +292,7 @@ def calculate_rebalancing_orders(
     new_total_idr = total_assets_idr + monthly_deposit_idr
 
     # Calculate current class weights
-    current_values: Dict[str, float] = {k: 0.0 for k in target_allocation.keys()}
+    current_values: dict[str, float] = {k: 0.0 for k in target_allocation.keys()}
     for h in holdings:
         val_idr = h.get("value_idr") or 0.0
         if val_idr <= 0:
@@ -293,7 +302,7 @@ def calculate_rebalancing_orders(
             current_values[aclass] += val_idr
 
     # Identify underweight classes and deficit amounts
-    deficits: Dict[str, float] = {}
+    deficits: dict[str, float] = {}
     total_deficit = 0.0
 
     for aclass, target_pct in target_allocation.items():
@@ -348,7 +357,7 @@ def calculate_fire_simulation(
     safe_withdrawal_rate_pct: float = 4.0,
     current_age: int = 30,
     target_retirement_age: int = 55
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Simulates Financial Independence / Retire Early (FIRE) metrics, milestones,
     Coast FIRE readiness, and projected timeline.
@@ -414,13 +423,13 @@ def calculate_fire_simulation(
 
 
 def calculate_tax_efficiency_audit(
-    holdings: List[Dict[str, Any]],
+    holdings: list[dict[str, Any]],
     exchange_rate: float
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Audits Indonesian tax treatment across portfolio holdings (PPh Final, Exemptions, Reinvestment).
     """
-    tax_buckets: Dict[str, Dict[str, Any]] = {
+    tax_buckets: dict[str, dict[str, Any]] = {
         "Tax Exempt (0% PPh)": {"value_idr": 0.0, "assets": []},
         "Reinvestment 0% / Reduced (Indo Equities)": {"value_idr": 0.0, "assets": []},
         "Preferential Final 10% (SBN / Bonds)": {"value_idr": 0.0, "assets": []},
@@ -494,7 +503,7 @@ def calculate_tax_efficiency_audit(
     }
 
 
-def load_historical_snapshots(data_dir: Path) -> List[Dict[str, Any]]:
+def load_historical_snapshots(data_dir: Path) -> list[dict[str, Any]]:
     """Loads all snapshots sorted chronologically, preferring portfolio.db if available."""
     db_path = data_dir / "portfolio.db"
     if db_path.exists():
@@ -555,7 +564,7 @@ def load_historical_snapshots(data_dir: Path) -> List[Dict[str, Any]]:
 
 
 
-def analyze_currency_exposure(holdings: List[Dict[str, Any]], exchange_rate: float) -> Dict[str, Any]:
+def analyze_currency_exposure(holdings: list[dict[str, Any]], exchange_rate: float) -> dict[str, Any]:
     """Calculate asset currency denomination exposure (IDR, USD, Native Crypto)."""
     idr_val = 0.0
     usd_val = 0.0
@@ -591,11 +600,252 @@ def analyze_currency_exposure(holdings: List[Dict[str, Any]], exchange_rate: flo
     }
 
 
+def calculate_clutter_and_dust_audit(
+    holdings: list[dict[str, Any]],
+    total_assets_idr: float,
+    exchange_rate: float
+) -> dict[str, Any]:
+    """
+    Audits fragmented micro-holdings and account clutter causing ADHD cognitive fatigue.
+    Identifies positions with weight < 1.0% or value < Rp 3,000,000 and generates
+    concrete, zero-brain consolidation directives.
+    """
+    dust_holdings = []
+    fragmented_total_idr = 0.0
+
+    for h in holdings:
+        val_idr = h.get("value_idr") or 0.0
+        if val_idr <= 0:
+            val_idr = (h.get("value_usd") or 0.0) * exchange_rate
+
+        pct = (val_idr / total_assets_idr * 100.0) if total_assets_idr > 0 else 0.0
+        asset = str(h.get("asset") or "")
+        cat = str(h.get("category") or "")
+        source = str(h.get("source") or "")
+
+        if val_idr > 0 and (pct < 1.0 or val_idr < 3_000_000):
+            dust_holdings.append({
+                "asset": asset,
+                "category": cat,
+                "source": source,
+                "value_idr": round(val_idr, 0),
+                "weight_pct": round(pct, 2)
+            })
+            fragmented_total_idr += val_idr
+
+    directives = []
+
+    # 1. Crypto dust (on-chain wallets or CEX)
+    wallet_crypto = [
+        d for d in dust_holdings
+        if d["category"] in {"Spot", "Yield / LP"} and d["source"] in {"Alchemy", "SOL Wallet", "EVM Wallet", "DeBank Wallet"}
+    ]
+    cex_crypto = [
+        d for d in dust_holdings
+        if d["category"] in {"Spot", "Earn"} and d["source"] in {"Binance", "Tokocrypto", "Indodax"}
+    ]
+    if wallet_crypto:
+        dust_names = ", ".join([f"{d['asset']} (Rp {d['value_idr']:,.0f})" for d in wallet_crypto])
+        directives.append(
+            f"Sweep On-Chain Dust: Convert or bridge {dust_names} into primary ETH/BTC or cash out to delete unused wallet apps."
+        )
+    if cex_crypto:
+        cex_names = ", ".join([f"{d['asset']} (Rp {d['value_idr']:,.0f})" for d in cex_crypto])
+        directives.append(
+            f"Convert Exchange Dust: Use 'Convert Small Balances to BNB/USDT' on exchange for {cex_names}."
+        )
+
+    # 2. Equity penny / satellite stocks
+    stock_dust = [d for d in dust_holdings if d["category"] == "Indo Stocks"]
+    if stock_dust:
+        stock_names = ", ".join([f"{d['asset']} (Rp {d['value_idr']:,.0f})" for d in stock_dust])
+        directives.append(
+            f"Liquidate Micro Stocks: Sell {stock_names} (<1% each) and consolidate proceeds into BBCA or Sri Kehati Index Fund."
+        )
+
+    # 3. Idle RDN Cash
+    rdn_dust = [d for d in dust_holdings if "RDN" in d["asset"] or (d["category"] == "Bank Account" and d["source"] == "KSEI")]
+    if rdn_dust:
+        rdn_names = ", ".join([f"{d['asset']} (Rp {d['value_idr']:,.0f})" for d in rdn_dust])
+        directives.append(
+            f"Consolidate Stock Brokers: Sweep idle cash from {rdn_names} into your primary active broker to eliminate dual RDN checking."
+        )
+
+    if not directives and dust_holdings:
+        directives.append("Consolidate positions under 1% of portfolio into your top 3 index/bluechip holdings.")
+
+    fragmented_pct = round((fragmented_total_idr / total_assets_idr * 100.0), 2) if total_assets_idr > 0 else 0.0
+    # Two-factor clutter score: count penalty + capital weight penalty
+    clutter_penalty = (len(dust_holdings) * 3.5) + (fragmented_pct * 12.0)
+    clutter_score = max(0.0, min(100.0, round(100.0 - clutter_penalty, 0)))
+
+    return {
+        "clutter_score": clutter_score,
+        "clutter_rating": "Clean" if clutter_score >= 85 else ("Moderate Clutter" if clutter_score >= 65 else "High Cognitive Load"),
+        "fragmented_count": len(dust_holdings),
+        "fragmented_total_idr": round(fragmented_total_idr, 0),
+        "fragmented_weight_pct": fragmented_pct,
+        "dust_holdings": dust_holdings,
+        "directives": directives
+    }
+
+
+def calculate_sbn_reinvestment_playbook(
+    sukuk_schedule: dict[str, Any],
+    asset_allocation: list[dict[str, Any]],
+    total_assets_idr: float = 0.0
+) -> dict[str, Any]:
+    """
+    Creates an autopilot reinvestment plan for SBN series maturing within 6 months.
+    Prevents decision paralysis and cash bleed when large principals return to bank accounts.
+    """
+    items = sukuk_schedule.get("schedule", [])
+    upcoming = [
+        item for item in items
+        if 0 <= item.get("days_to_maturity", -1) <= 180 and item.get("principal_idr", 0) > 0
+    ]
+
+    if not upcoming:
+        return {
+            "has_upcoming_maturity": False,
+            "maturing_asset": "",
+            "maturity_date": "",
+            "days_left": 0,
+            "principal_idr": 0.0,
+            "lost_monthly_idr": 0.0,
+            "action_plan": ["No SBN maturities within next 6 months. Portfolio compounding passively."]
+        }
+
+    soonest = min(upcoming, key=lambda x: x.get("days_to_maturity", 999))
+    asset = soonest["asset"]
+    principal = soonest["principal_idr"]
+    net_monthly = soonest.get("net_monthly_idr", 0.0)
+    mat_date = soonest.get("maturity_date", "")
+    days_left = soonest.get("days_to_maturity", 0)
+
+    equities_drift = 0.0
+    for a in asset_allocation:
+        if a.get("asset_class") == "Equities":
+            equities_drift = a.get("drift_pct", 0.0)
+
+    plan = []
+    if equities_drift < -5.0 and principal >= 20_000_000:
+        # Dynamically size equity portion to bridge the drift deficit
+        if total_assets_idr > 0:
+            equity_gap = (abs(equities_drift) / 100.0) * total_assets_idr
+            equity_portion = round(min(equity_gap, principal * 0.50), 0)
+        else:
+            equity_portion = round(principal * 0.45, 0)
+
+        fixed_income_portion = principal - equity_portion
+        plan.append(
+            f"Pre-commit Rollover: On {mat_date}, allocate Rp {fixed_income_portion:,.0f} into next sovereign Sukuk/SBN (e.g. ST/SR) to lock in ~6.4%+ yield."
+        )
+        plan.append(
+            f"Equities Rebalance: Deploy remaining Rp {equity_portion:,.0f} into SRI-KEHATI / BBCA to automatically eliminate the {equities_drift:+.1f}% equity drift in 1 transaction."
+        )
+    else:
+        plan.append(
+            f"100% Rollover: Pre-register for the next sovereign Sukuk series to immediately redeploy the Rp {principal:,.0f} principal."
+        )
+
+    plan.append("Automate Calendar Reminder: Set alert for 7 days prior to maturity to prevent cash sitting idle in checking.")
+
+    return {
+        "has_upcoming_maturity": True,
+        "maturing_asset": asset,
+        "maturity_date": mat_date,
+        "days_left": days_left,
+        "principal_idr": principal,
+        "lost_monthly_idr": net_monthly,
+        "action_plan": plan
+    }
+
+
+def calculate_vault_lockbox_summary(
+    holdings: list[dict[str, Any]],
+    total_assets_idr: float,
+    exchange_rate: float
+) -> dict[str, Any]:
+    """
+    Separates locked background compounding (Sukuk, locked vaults, term deposits) from active actionable capital.
+    Provides cognitive relief by telling the ADHD user what NOT to look at or worry about.
+    """
+    locked_idr = 0.0
+    actionable_idr = 0.0
+
+    for h in holdings:
+        val_idr = h.get("value_idr") or 0.0
+        if val_idr <= 0:
+            val_idr = (h.get("value_usd") or 0.0) * exchange_rate
+
+        cat = str(h.get("category") or "")
+        asset = str(h.get("asset") or "")
+
+        if any(keyword in cat or keyword in asset for keyword in ("SBN", "Sukuk", "Bond", "Deposito", "Term Deposit", "Staking (Locked)")):
+            locked_idr += val_idr
+        else:
+            actionable_idr += val_idr
+
+    locked_pct = round((locked_idr / total_assets_idr * 100.0), 1) if total_assets_idr > 0 else 0.0
+    actionable_pct = round((actionable_idr / total_assets_idr * 100.0), 1) if total_assets_idr > 0 else 0.0
+
+    return {
+        "locked_vault_idr": round(locked_idr, 0),
+        "locked_vault_pct": locked_pct,
+        "actionable_capital_idr": round(actionable_idr, 0),
+        "actionable_capital_pct": actionable_pct,
+        "calmness_directive": f"Rp {locked_idr:,.0f} ({locked_pct}%) is locked in sovereign Sukuk/Vaults compounding autonomously. Do not check or touch daily."
+    }
+
+
+def calculate_deposit_router(
+    rebalancing_plan: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Synthesizes the rebalancing matrix into a single, unambiguous next DCA action card.
+    Zero deliberation needed for an ADHD brain.
+    """
+    recs = rebalancing_plan.get("recommendations", [])
+    deposit_amt = rebalancing_plan.get("deposit_amount_idr", 5_000_000.0)
+
+    if not recs:
+        return {
+            "one_step_action": f"Deposit Rp {deposit_amt:,.0f} into High-Yield Savings or Emergency Fund.",
+            "priority_asset_class": "Cash & Equivalents",
+            "deposit_amount_idr": deposit_amt
+        }
+
+    sorted_recs = sorted(recs, key=lambda x: x.get("drift_pct", 0.0))
+    top_underweight = sorted_recs[0]
+    aclass = top_underweight.get("asset_class", "Equities")
+    drift = top_underweight.get("drift_pct", 0.0)
+    suggested_action = top_underweight.get("suggested_action", "")
+
+    if drift >= -1.0:
+        one_step = (
+            f"Portfolio balanced within ±1% drift. Direct Rp {deposit_amt:,.0f} to High-Yield Savings (Krom/Aladin) or index core."
+        )
+        return {
+            "one_step_action": one_step,
+            "priority_asset_class": "Cash & Equivalents",
+            "deposit_amount_idr": deposit_amt
+        }
+
+    one_step = f"Deposit Rp {deposit_amt:,.0f} into {aclass} ({suggested_action}). Currently {drift:+.1f}% underweight. Zero debate."
+
+    return {
+        "one_step_action": one_step,
+        "priority_asset_class": aclass,
+        "deposit_amount_idr": deposit_amt
+    }
+
+
 def generate_ai_state(
-    current_snapshot: Dict[str, Any],
-    all_snapshots: Optional[List[Dict[str, Any]]] = None,
-    target_allocation: Optional[Dict[str, float]] = None
-) -> Dict[str, Any]:
+    current_snapshot: dict[str, Any],
+    all_snapshots: list[dict[str, Any]] | None = None,
+    target_allocation: dict[str, float] | None = None
+) -> dict[str, Any]:
     """
     Constructs a dense, token-efficient financial state dictionary.
     Removes repetitive boilerplate and focuses on actionable financial metrics.
@@ -742,10 +992,10 @@ def generate_ai_state(
     monthly_burn_for_fi = None
     try:
         from portfolio_app.cashflow_analyzer import (
-            resolve_sans_finance_db,
-            get_live_accounts,
-            get_cashflow_metrics,
             calculate_runway,
+            get_cashflow_metrics,
+            get_live_accounts,
+            resolve_sans_finance_db,
         )
         db_path = resolve_sans_finance_db(data_dir=get_data_dir(), auto_pull_gcs=False)
         if db_path and db_path.exists():
@@ -804,6 +1054,12 @@ def generate_ai_state(
         target_allocation=target_allocation
     )
 
+    # 11. ADHD Focus & Cognitive Simplicity Suite
+    clutter_audit = calculate_clutter_and_dust_audit(holdings, total_assets_idr, exchange_rate)
+    sbn_reinvestment_playbook = calculate_sbn_reinvestment_playbook(sukuk_schedule, asset_allocation, total_assets_idr)
+    vault_summary = calculate_vault_lockbox_summary(holdings, total_assets_idr, exchange_rate)
+    deposit_router = calculate_deposit_router(rebalancing_plan)
+
     return {
         "state_date": date,
         "exchange_rate": exchange_rate,
@@ -833,15 +1089,22 @@ def generate_ai_state(
         },
         "top_holdings": top_holdings_dense,
         "history_trajectory": history_trajectory,
-        "cashflow_and_runway": cashflow_summary
+        "cashflow_and_runway": cashflow_summary,
+        "adhd_focus_metrics": {
+            "clutter_audit": clutter_audit,
+            "sbn_reinvestment_playbook": sbn_reinvestment_playbook,
+            "vault_summary": vault_summary,
+            "deposit_router": deposit_router,
+        }
     }
 
 
-def generate_ai_digest_markdown(ai_state: Dict[str, Any]) -> str:
+def generate_ai_digest_markdown(ai_state: dict[str, Any]) -> str:
     """Renders the AI financial state as an executive markdown report for prompt injection."""
     metrics = ai_state["macro_metrics"]
     date = ai_state["state_date"]
     fx = ai_state["exchange_rate"]
+    adhd = ai_state.get("adhd_focus_metrics", {})
 
     growth_sign = "+" if metrics["mom_growth_pct"] >= 0 else ""
     mom_str = f"{growth_sign}{metrics['mom_growth_pct']}% (Rp {metrics['mom_growth_idr']:+,.0f})" if metrics["comparison_period"] != "N/A (Initial)" else "Initial Baseline"
@@ -857,6 +1120,11 @@ def generate_ai_digest_markdown(ai_state: Dict[str, Any]) -> str:
     if metrics["total_liabilities_idr"] > 0:
         md.append(f"- **Total Liabilities**: Rp {metrics['total_liabilities_idr']:,.0f}")
     md.append(f"- **Liquid Cash Reserve**: Rp {ai_state['liquidity']['liquid_cash_idr']:,.0f} ({ai_state['liquidity']['liquid_cash_pct']}% of portfolio)")
+
+    if adhd.get("vault_summary"):
+        vs = adhd["vault_summary"]
+        md.append(f"- **Autonomous Vault (Locked)**: Rp {vs['locked_vault_idr']:,.0f} ({vs['locked_vault_pct']}%) | **Actionable Liquid**: Rp {vs['actionable_capital_idr']:,.0f} ({vs['actionable_capital_pct']}%)")
+        md.append(f"- 🧘 **Cognitive Calmer**: {vs['calmness_directive']}")
 
     if ai_state.get("attribution_analysis") and ai_state["attribution_analysis"].get("has_history"):
         attr = ai_state["attribution_analysis"]
@@ -894,6 +1162,16 @@ def generate_ai_digest_markdown(ai_state: Dict[str, Any]) -> str:
             md.append(f"| **{item['asset']}** | Rp {item['principal_idr']:,.0f} | {item['annual_coupon_pct']:.2f}% | **Rp {item['net_monthly_idr']:,.0f}**/mo | {item.get('maturity_date', 'N/A')} | {item.get('months_to_maturity', 0)} mo |")
         md.append("")
 
+    if adhd.get("sbn_reinvestment_playbook") and adhd["sbn_reinvestment_playbook"].get("has_upcoming_maturity"):
+        playbook = adhd["sbn_reinvestment_playbook"]
+        md.append("### 3.6 🎯 Autopilot SBN Reinvestment Playbook (Decision Fatigue Shield)")
+        md.append(f"> ⚠️ **Maturing Asset**: **{playbook['maturing_asset']}** (Rp {playbook['principal_idr']:,.0f}) matures on **{playbook['maturity_date']}** ({playbook['days_left']} days left).")
+        md.append(f"> 📉 **Lost Cashflow upon Maturity**: -Rp {playbook['lost_monthly_idr']:,.0f}/mo net coupon.")
+        md.append("> **Pre-Committed Action Plan:**")
+        for step in playbook["action_plan"]:
+            md.append(f"> • {step}")
+        md.append("")
+
     md.append("## 4. Currency Exposure")
     curr = ai_state["currency_exposure"]
     md.append(f"- **IDR Assets**: {curr.get('idr_pct', 0)}% (Rp {curr.get('idr_val', 0):,.0f})")
@@ -917,11 +1195,24 @@ def generate_ai_digest_markdown(ai_state: Dict[str, Any]) -> str:
     if ai_state.get("rebalancing_plan") and ai_state["rebalancing_plan"].get("recommendations"):
         reb = ai_state["rebalancing_plan"]
         md.append(f"## 7. Deposit-Only Rebalancing Guideline (Based on Rp {reb['deposit_amount_idr']:,.0f} DCA)")
+        if adhd.get("deposit_router"):
+            md.append(f"> ⚡ **Zero-Brain Next Action**: {adhd['deposit_router']['one_step_action']}\n")
         md.append("| Asset Class | Current Weight | Target Weight | Drift | Suggested Allocation | Action |")
         md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
         for r in reb["recommendations"]:
             drift_s = f"{r['drift_pct']:+0.1f}%"
             md.append(f"| **{r['asset_class']}** | {r['current_weight_pct']:.1f}% | {r['target_weight_pct']:.1f}% | `{drift_s}` | **Rp {r['deposit_allocation_idr']:,.0f}** ({r['allocation_pct_of_deposit']}%) | {r['suggested_action']} |")
+        md.append("")
+
+    if adhd.get("clutter_audit"):
+        ca = adhd["clutter_audit"]
+        md.append("## 7.5 🧹 ADHD Asset Clutter & Dust Sweeper Audit")
+        md.append(f"- **Portfolio Clutter Score**: **{ca['clutter_score']}/100** ({ca['clutter_rating']})")
+        md.append(f"- **Fragmented Micro-Holdings**: **{ca['fragmented_count']} assets** totaling Rp {ca['fragmented_total_idr']:,.0f} ({ca['fragmented_weight_pct']}% of portfolio)")
+        if ca.get("directives"):
+            md.append("\n**Actionable Consolidation Directives:**")
+            for d in ca["directives"]:
+                md.append(f"  • {d}")
         md.append("")
 
     if ai_state.get("history_trajectory"):
@@ -954,8 +1245,8 @@ def generate_ai_digest_markdown(ai_state: Dict[str, Any]) -> str:
 
 
 def build_and_save_ai_state(
-    snapshot_input: Path | Dict[str, Any], output_dir: Optional[Path] = None
-) -> Dict[str, Any]:
+    snapshot_input: Path | dict[str, Any], output_dir: Path | None = None
+) -> dict[str, Any]:
     """Loads snapshot, computes AI state, and writes out both JSON and Markdown digests."""
     data_dir = get_data_dir()
     if output_dir is None:
@@ -990,7 +1281,7 @@ def build_and_save_ai_state(
     except Exception as e:
         print(f"⚠️ Warning: Failed to save AI state to portfolio.db: {e}")
 
-    print(f"🤖 AI Financial State generated:")
+    print("🤖 AI Financial State generated:")
     print(f"   • JSON: {latest_json_path.name}")
     print(f"   • Digest: {latest_md_path.name}")
 

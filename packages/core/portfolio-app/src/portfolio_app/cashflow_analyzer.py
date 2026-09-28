@@ -76,14 +76,17 @@ def resolve_sans_finance_db(data_dir: Optional[Path] = None, auto_pull_gcs: bool
         return Path(env_path)
 
     # 2. Check local data directory candidates
+    repo_root = Path(__file__).resolve().parents[5]
     candidates = [
         data_dir / "sans_finance_latest.sqlite",
         data_dir / "sans_finance_db_snapshot.sqlite",
-        Path(__file__).resolve().parents[5] / "sansfinance" / "sans_finance_latest.sqlite",
-        Path(__file__).resolve().parents[5] / "sansfinance" / "sans_finance_db_snapshot.sqlite",
+        repo_root.parent / "sansfinance" / "sans_finance_latest.sqlite",
+        repo_root.parent / "sansfinance" / "sans_finance_db_snapshot.sqlite",
+        repo_root / "sansfinance" / "sans_finance_latest.sqlite",
+        repo_root / "sansfinance" / "sans_finance_db_snapshot.sqlite",
     ]
     for c in candidates:
-        if c.exists():
+        if c.exists() and c.stat().st_size > 0:
             return c
 
     # 3. Pull from Cloud (R2 first, then GCS) if enabled

@@ -4,10 +4,14 @@ Unit tests for AI State and Digest Generator.
 
 import pytest
 from portfolio_app.ai_state_generator import (
+    calculate_clutter_and_dust_audit,
+    calculate_deposit_router,
     calculate_fire_simulation,
     calculate_passive_income,
     calculate_rebalancing_orders,
+    calculate_sbn_reinvestment_playbook,
     calculate_tax_efficiency_audit,
+    calculate_vault_lockbox_summary,
     generate_ai_digest_markdown,
     generate_ai_state,
 )
@@ -152,3 +156,99 @@ def test_calculate_tax_efficiency_audit(sample_holdings):
     assert audit["tax_efficiency_grade"] in {"A", "A+"}
     assert len(audit["buckets"]) > 0
     assert len(audit["optimization_opportunities"]) >= 0
+
+
+def test_calculate_clutter_and_dust_audit():
+    holdings = [
+        {"asset": "SOL", "category": "Spot", "source": "Alchemy", "value_idr": 400_000.0},
+        {"asset": "DOGE", "category": "Spot", "source": "Binance", "value_idr": 200_000.0},
+        {"asset": "KLAS", "category": "Indo Stocks", "source": "KSEI", "value_idr": 2_000_000.0},
+        {"asset": "BBCA", "category": "Indo Stocks", "source": "KSEI", "value_idr": 100_000_000.0},
+    ]
+    audit = calculate_clutter_and_dust_audit(holdings, total_assets_idr=102_600_000.0, exchange_rate=16000.0)
+    assert audit["fragmented_count"] == 3
+    assert audit["clutter_score"] < 100.0
+    assert len(audit["directives"]) >= 3
+    assert any("Sweep On-Chain Dust" in d for d in audit["directives"])
+    assert any("Convert Exchange Dust" in d for d in audit["directives"])
+    assert any("Liquidate Micro Stocks" in d for d in audit["directives"])
+
+
+def test_calculate_sbn_reinvestment_playbook():
+    sukuk_schedule = {
+        "schedule": [
+            {
+                "asset": "ST013T2",
+                "principal_idr": 61_000_000.0,
+                "net_monthly_idr": 292_800.0,
+                "maturity_date": "2026-11-10",
+                "days_to_maturity": 45,
+                "months_to_maturity": 1.5,
+            },
+            {
+                "asset": "OLD_BOND",
+                "principal_idr": 50_000_000.0,
+                "net_monthly_idr": 200_000.0,
+                "maturity_date": "2024-01-01",
+                "days_to_maturity": -100,
+                "months_to_maturity": -3.0,
+            }
+        ]
+    }
+    allocations = [
+        {"asset_class": "Equities", "drift_pct": -14.1},
+        {"asset_class": "Fixed Income", "drift_pct": -0.6},
+    ]
+    # SBN upcoming maturity with dynamic equity gap calculation
+    playbook = calculate_sbn_reinvestment_playbook(
+        sukuk_schedule,
+        allocations,
+        total_assets_idr=500_000_000.0
+    )
+    assert playbook["has_upcoming_maturity"] is True
+    assert playbook["maturing_asset"] == "ST013T2"
+    assert playbook["principal_idr"] == 61_000_000.0
+    assert len(playbook["action_plan"]) >= 2
+    # Verify dynamic equity allocation (capped at 50% = 30.5m)
+    assert any("30,500,000" in step for step in playbook["action_plan"])
+
+
+def test_calculate_vault_lockbox_summary():
+    holdings = [
+        {"asset": "ST012T4", "category": "SBN", "value_idr": 80_000_000.0},
+        {"asset": "Deposito Mudharabah", "category": "Term Deposit", "value_idr": 10_000_000.0},
+        {"asset": "BBCA", "category": "Indo Stocks", "value_idr": 10_000_000.0},
+    ]
+    vault = calculate_vault_lockbox_summary(holdings, total_assets_idr=100_000_000.0, exchange_rate=16000.0)
+    assert vault["locked_vault_idr"] == 90_000_000.0
+    assert vault["locked_vault_pct"] == 90.0
+    assert vault["actionable_capital_idr"] == 10_000_000.0
+    assert "locked in sovereign Sukuk/Vaults" in vault["calmness_directive"]
+
+
+def test_calculate_deposit_router():
+    # Underweight case
+    rebalancing_plan = {
+        "deposit_amount_idr": 5_000_000.0,
+        "recommendations": [
+            {"asset_class": "Equities", "drift_pct": -14.1, "suggested_action": "Buy Sri Kehati"},
+            {"asset_class": "Crypto", "drift_pct": -3.5, "suggested_action": "Buy ETH"},
+        ],
+    }
+    router = calculate_deposit_router(rebalancing_plan)
+    assert router["priority_asset_class"] == "Equities"
+    assert "Equities" in router["one_step_action"]
+    assert "Zero debate" in router["one_step_action"]
+
+    # Balanced case (drift >= -1.0)
+    balanced_plan = {
+        "deposit_amount_idr": 5_000_000.0,
+        "recommendations": [
+            {"asset_class": "Equities", "drift_pct": 0.2, "suggested_action": "Hold"},
+            {"asset_class": "Fixed Income", "drift_pct": -0.4, "suggested_action": "Hold"},
+        ],
+    }
+    balanced_router = calculate_deposit_router(balanced_plan)
+    assert balanced_router["priority_asset_class"] == "Cash & Equivalents"
+    assert "Portfolio balanced within ±1% drift" in balanced_router["one_step_action"]
+

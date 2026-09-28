@@ -111,12 +111,18 @@ uv run integrate-only  # Skip fetching, just transform and integrate
 # AI Agent & MCP Integration (Hermes, Claude, Cursor, Goose, Antigravity)
 uv run portfolio-mcp          # Run as stdio JSON-RPC 2.0 MCP server (default or --mcp)
 uv run portfolio-mcp --audit    # Run automated portfolio health check
+uv run portfolio-mcp --adhd     # Output zero-friction ADHD action card (1-step DCA, dust directives, SBN rollover)
 uv run portfolio-mcp --digest   # Output latest token-optimized Markdown brief
 uv run portfolio-mcp --json     # Output latest token-optimized state JSON
 uv run portfolio-ai-state       # Regenerate latest AI state and digest
 uv run portfolio-advisor        # Quantitative advisor & 3-tier sovereign runway matrix (multi-cycle idx-bei signals)
 uv run portfolio-advisor --markdown # Non-ANSI Markdown briefing for Telegram/cron
-uv run portfolio-advisor --json     # Structured JSON payload for downstream apps
+uv run portfolio-advisor --json     # Structured JSON payload for downstream apps (includes ADHD Focus Suite)
+# ADHD Focus Suite: Built into advisor & ai-state:
+# - Clutter Sweeper: Audits micro-holdings (<1% NW) with 1-step sweeping directives
+# - SBN Reinvestment Playbook: Pre-commits allocation plan for maturing Sukuk (e.g. ST013T2 Rp 61M in Nov 2026)
+# - Deposit Router: Generates unambiguous 1-step DCA action card
+# - Autonomous Vault: Segregates locked compounding (Sukuk) from active capital
 ```
 
 ---
