@@ -1,6 +1,7 @@
 package debank
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,7 +9,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/nichsedge/portfolio-integration/pkg/fetchers/debank/scraper"
 	"github.com/nichsedge/portfolio-integration/pkg/models"
 )
 
@@ -86,15 +89,22 @@ func parseAmount(val interface{}) float64 {
 	return 0.0
 }
 
-// Scrape invokes debank-scrape CLI if installed.
+// Scrape invokes native chromedp scraper with fallback to external CLI if needed.
 func Scrape(address, targetPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	s := scraper.New(scraper.Config{Headless: true})
+	if _, err := s.ScrapeToFile(ctx, address, targetPath); err == nil {
+		return nil
+	}
+
+	// Fallback to debank-scrape CLI if installed
 	binPath := filepath.Join(os.Getenv("HOME"), "go/bin/debank-scrape")
 	if _, err := os.Stat(binPath); err != nil {
-		// Try system PATH
 		var err2 error
 		binPath, err2 = exec.LookPath("debank-scrape")
 		if err2 != nil {
-			return fmt.Errorf("debank-scrape binary not found: %w", err)
+			return fmt.Errorf("debank scraping failed and binary not found: %w", err)
 		}
 	}
 

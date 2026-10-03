@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -10,7 +11,10 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/nichsedge/portfolio-integration/pkg/advisor"
+	"github.com/nichsedge/portfolio-integration/pkg/aistate"
 	"github.com/nichsedge/portfolio-integration/pkg/db"
+	"github.com/nichsedge/portfolio-integration/pkg/enricher"
 	"github.com/nichsedge/portfolio-integration/pkg/fetchers/alchemy"
 	"github.com/nichsedge/portfolio-integration/pkg/fetchers/binance"
 	"github.com/nichsedge/portfolio-integration/pkg/fetchers/debank"
@@ -18,6 +22,7 @@ import (
 	"github.com/nichsedge/portfolio-integration/pkg/fetchers/sansfinance"
 	"github.com/nichsedge/portfolio-integration/pkg/fx"
 	"github.com/nichsedge/portfolio-integration/pkg/integrator"
+	"github.com/nichsedge/portfolio-integration/pkg/mcp"
 	"github.com/nichsedge/portfolio-integration/pkg/models"
 	"github.com/nichsedge/portfolio-integration/pkg/r2"
 )
@@ -92,6 +97,12 @@ func main() {
 		runFetch(args)
 	case "integrate":
 		runIntegrate(args)
+	case "ai-state":
+		runAIState(args)
+	case "advisor":
+		runAdvisor(args)
+	case "mcp":
+		runMCP(args)
 	case "r2":
 		runR2(args)
 	case "help", "--help", "-h":
@@ -106,9 +117,12 @@ func main() {
 func printHelp() {
 	fmt.Println("🚀 Portfolio Integration CLI (Go)")
 	fmt.Println("\nUsage:")
-	fmt.Println("  portfolio run-all       Run full multi-asset pipeline (fetch, integrate, persist, upload)")
+	fmt.Println("  portfolio run-all       Run full multi-asset pipeline (fetch, integrate, ai-state, r2)")
 	fmt.Println("  portfolio fetch <src>   Fetch single source (ksei, debank, binance, alchemy, sansfinance)")
-	fmt.Println("  portfolio integrate     Integrate existing raw data into JSON snapshot and SQLite SSOT")
+	fmt.Println("  portfolio integrate     Integrate raw data, enrich yields, persist snapshot & SQLite")
+	fmt.Println("  portfolio ai-state      Generate latest_ai_state.json & latest_ai_digest.md")
+	fmt.Println("  portfolio advisor       Quantitative sovereign runway matrix & rebalance directives")
+	fmt.Println("  portfolio mcp           Run stdio Model Context Protocol (MCP) server for AI agents")
 	fmt.Println("  portfolio r2 <action>   R2 cloud operations (push, status)")
 }
 
@@ -149,14 +163,30 @@ func runAll(args []string) {
 		} else {
 			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
 			tryFallbackCache(rawKseiPath, date, dataDir, "ksei")
+			if raw, err := os.ReadFile(rawKseiPath); err == nil {
+				var d ksei.RawKseiData
+				if json.Unmarshal(raw, &d) == nil {
+					h := ksei.Standardize(&d)
+					allHoldings = append(allHoldings, h...)
+					fmt.Printf("✓ loaded %d cached holdings\n", len(h))
+				}
+			}
 		}
 	} else {
-		fmt.Println("⚠️ credentials missing - checking cache fallback")
+		fmt.Println("⚠️ (no credentials) - checking cache fallback")
 		tryFallbackCache(rawKseiPath, date, dataDir, "ksei")
+		if raw, err := os.ReadFile(rawKseiPath); err == nil {
+			var d ksei.RawKseiData
+			if json.Unmarshal(raw, &d) == nil {
+				h := ksei.Standardize(&d)
+				allHoldings = append(allHoldings, h...)
+				fmt.Printf("✓ loaded %d cached holdings\n", len(h))
+			}
+		}
 	}
 
 	// 2. Fetch SansFinance
-	fmt.Print("⏳ [2/5] Fetching SansFinance accounts from R2... ")
+	fmt.Print("⏳ [2/5] Fetching SansFinance... ")
 	r2Acc := os.Getenv("R2_ACCOUNT_ID")
 	r2Key := os.Getenv("R2_ACCESS_KEY_ID")
 	r2Sec := os.Getenv("R2_SECRET_ACCESS_KEY")
@@ -175,70 +205,113 @@ func runAll(args []string) {
 		} else {
 			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
 			tryFallbackCache(rawSansPath, date, dataDir, "sansfinance")
+			if raw, err := os.ReadFile(rawSansPath); err == nil {
+				var d sansfinance.RawSansfinanceData
+				if json.Unmarshal(raw, &d) == nil {
+					h := sansfinance.Standardize(&d)
+					allHoldings = append(allHoldings, h...)
+					fmt.Printf("✓ loaded %d cached accounts\n", len(h))
+				}
+			}
 		}
 	} else {
-		fmt.Println("⚠️ credentials missing - checking cache fallback")
+		fmt.Println("⚠️ (no R2 creds) - checking cache fallback")
 		tryFallbackCache(rawSansPath, date, dataDir, "sansfinance")
-	}
-
-	// 3. Fetch Alchemy (Solana)
-	fmt.Print("⏳ [3/5] Fetching Solana assets (Alchemy)... ")
-	solAddr := os.Getenv("SOL_ADDRESS")
-	alchKey := os.Getenv("ALCHEMY_API_KEY")
-	curatedAlchPath := filepath.Join(dataDir, fmt.Sprintf("%s_curated_alchemy.json", date))
-	if solAddr != "" && alchKey != "" {
-		curAlch, alchHoldings, err := alchemy.Fetch(alchKey, solAddr)
-		if err == nil {
-			_ = alchemy.SaveCurated(curAlch, curatedAlchPath)
-			allHoldings = append(allHoldings, alchHoldings...)
-			fmt.Printf("✓ %d tokens\n", len(alchHoldings))
-		} else {
-			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
-			tryFallbackCache(curatedAlchPath, date, dataDir, "alchemy")
+		if raw, err := os.ReadFile(rawSansPath); err == nil {
+			var d sansfinance.RawSansfinanceData
+			if json.Unmarshal(raw, &d) == nil {
+				h := sansfinance.Standardize(&d)
+				allHoldings = append(allHoldings, h...)
+				fmt.Printf("✓ loaded %d cached accounts\n", len(h))
+			}
 		}
-	} else {
-		fmt.Println("⚠️ credentials missing - checking cache fallback")
-		tryFallbackCache(curatedAlchPath, date, dataDir, "alchemy")
 	}
 
-	// 4. Fetch Binance
-	fmt.Print("⏳ [4/5] Fetching Binance balances (Spot & Earn)... ")
+	// 3. Fetch Binance
+	fmt.Print("⏳ [3/5] Fetching Binance... ")
 	binKey := os.Getenv("BINANCE_API_KEY")
-	binSec := os.Getenv("BINANCE_SECRET")
+	binSec := os.Getenv("BINANCE_API_SECRET")
 	rawBinPath := filepath.Join(dataDir, fmt.Sprintf("%s_raw_binance.json", date))
 	if binKey != "" && binSec != "" {
 		rawBin, binHoldings, err := binance.Fetch(binKey, binSec)
 		if err == nil {
 			_ = binance.SaveRaw(rawBin, rawBinPath)
 			allHoldings = append(allHoldings, binHoldings...)
-			fmt.Printf("✓ %d assets\n", len(binHoldings))
+			fmt.Printf("✓ %d balances\n", len(binHoldings))
 		} else {
 			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
 			tryFallbackCache(rawBinPath, date, dataDir, "binance")
+			if raw, err := os.ReadFile(rawBinPath); err == nil {
+				var d binance.RawBinanceData
+				if json.Unmarshal(raw, &d) == nil {
+					h := binance.Standardize(&d)
+					allHoldings = append(allHoldings, h...)
+					fmt.Printf("✓ loaded %d cached balances\n", len(h))
+				}
+			}
 		}
 	} else {
-		fmt.Println("⚠️ credentials missing - checking cache fallback")
+		fmt.Println("⚠️ (no credentials) - checking cache fallback")
 		tryFallbackCache(rawBinPath, date, dataDir, "binance")
+		if raw, err := os.ReadFile(rawBinPath); err == nil {
+			var d binance.RawBinanceData
+			if json.Unmarshal(raw, &d) == nil {
+				h := binance.Standardize(&d)
+				allHoldings = append(allHoldings, h...)
+				fmt.Printf("✓ loaded %d cached balances\n", len(h))
+			}
+		}
 	}
 
-	// 5. Fetch DeBank (EVM)
-	fmt.Print("⏳ [5/5] Fetching DeBank EVM balances... ")
-	rawDebankPath := filepath.Join(dataDir, fmt.Sprintf("%s_raw_debank.json", date))
-	evmAddr := os.Getenv("ETH_ADDRESS")
-	if evmAddr == "" {
-		evmAddr = os.Getenv("EVM_ADDRESS")
-	}
-	if evmAddr != "" {
-		err := debank.Scrape(evmAddr, rawDebankPath)
+	// 4. Fetch Alchemy (Solana)
+	fmt.Print("⏳ [4/5] Fetching Alchemy (Solana)... ")
+	solAddr := os.Getenv("SOL_ADDRESS")
+	alchKey := os.Getenv("ALCHEMY_API_KEY")
+	rawAlchPath := filepath.Join(dataDir, fmt.Sprintf("%s_curated_alchemy.json", date))
+	if solAddr != "" && alchKey != "" {
+		rawAlch, alchHoldings, err := alchemy.Fetch(solAddr, alchKey)
 		if err == nil {
-			if _, dHoldings, err := debank.LoadRaw(rawDebankPath); err == nil {
-				allHoldings = append(allHoldings, dHoldings...)
-				fmt.Printf("✓ %d holdings\n", len(dHoldings))
-			} else {
-				fmt.Printf("⚠️ failed to parse: %v\n", err)
+			_ = alchemy.SaveCurated(rawAlch, rawAlchPath)
+			allHoldings = append(allHoldings, alchHoldings...)
+			fmt.Printf("✓ %d tokens\n", len(alchHoldings))
+		} else {
+			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
+			tryFallbackCache(rawAlchPath, date, dataDir, "alchemy")
+			if raw, err := os.ReadFile(rawAlchPath); err == nil {
+				var d alchemy.CuratedAlchemyData
+				if json.Unmarshal(raw, &d) == nil {
+					h := alchemy.Standardize(&d)
+					allHoldings = append(allHoldings, h...)
+					fmt.Printf("✓ loaded %d cached tokens\n", len(h))
+				}
+			}
+		}
+	} else {
+		fmt.Println("⚠️ (no SOL credentials) - checking cache fallback")
+		tryFallbackCache(rawAlchPath, date, dataDir, "alchemy")
+		if raw, err := os.ReadFile(rawAlchPath); err == nil {
+			var d alchemy.CuratedAlchemyData
+			if json.Unmarshal(raw, &d) == nil {
+				h := alchemy.Standardize(&d)
+				allHoldings = append(allHoldings, h...)
+				fmt.Printf("✓ loaded %d cached tokens\n", len(h))
+			}
+		}
+	}
+
+	// 5. Fetch DeBank
+	fmt.Print("⏳ [5/5] Fetching DeBank (EVM)... ")
+	ethAddr := os.Getenv("ETH_ADDRESS")
+	rawDebankPath := filepath.Join(dataDir, fmt.Sprintf("%s_raw_debank.json", date))
+	if ethAddr != "" {
+		err := debank.Scrape(ethAddr, rawDebankPath)
+		if err == nil {
+			if _, debankHoldings, err := debank.LoadRaw(rawDebankPath); err == nil {
+				allHoldings = append(allHoldings, debankHoldings...)
+				fmt.Printf("✓ %d assets\n", len(debankHoldings))
 			}
 		} else {
-			fmt.Printf("⚠️ scrape failed (%v) - checking cache fallback\n", err)
+			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
 			tryFallbackCache(rawDebankPath, date, dataDir, "debank")
 			if _, dHoldings, err := debank.LoadRaw(rawDebankPath); err == nil {
 				allHoldings = append(allHoldings, dHoldings...)
@@ -246,7 +319,7 @@ func runAll(args []string) {
 			}
 		}
 	} else {
-		fmt.Println("⚠️ address missing - checking cache fallback")
+		fmt.Println("⚠️ (no ETH_ADDRESS) - checking cache fallback")
 		tryFallbackCache(rawDebankPath, date, dataDir, "debank")
 		if _, dHoldings, err := debank.LoadRaw(rawDebankPath); err == nil {
 			allHoldings = append(allHoldings, dHoldings...)
@@ -254,8 +327,10 @@ func runAll(args []string) {
 		}
 	}
 
-	// Step 6: Integration
+	// Step 6: Yield Enrichment & Integration
 	fmt.Println("\n--- Integrating Portfolio ---")
+	allHoldings = enricher.EnrichHoldings(allHoldings)
+
 	rate := fx.GetExchangeRate(dataDir)
 	fmt.Printf("💵 Exchange Rate: 1 USD = Rp %.2f\n", rate)
 
@@ -275,14 +350,32 @@ func runAll(args []string) {
 
 	printSummary(snap)
 
-	// Step 7: Cloud Upload
+	// Step 7: AI Financial State & Sovereign Runway Generator
+	fmt.Print("🧠 Generating token-optimized AI State & Sovereign Digest... ")
+	aiStateObj, err := aistate.GenerateAIState(snap, dbConn)
+	if err == nil {
+		digestMD := aistate.GenerateAIDigestMarkdown(aiStateObj)
+		_ = aistate.SaveAIState(aiStateObj, digestMD, dataDir, dbConn)
+
+		advPayload := advisor.GenerateAdvisorPayload(snap, aiStateObj, dbConn)
+		_ = advisor.SaveAdvisorPayload(advPayload, dataDir)
+		fmt.Println("✓ Generated latest_ai_state.json & latest_ai_digest.md")
+	} else {
+		fmt.Printf("⚠️ (%v)\n", err)
+	}
+
+	// Step 8: Cloud Upload
 	if !*noUpload && r2Acc != "" && r2Key != "" && r2Sec != "" {
-		fmt.Println("☁️ Uploading portfolio snapshot and DB to Cloudflare R2...")
+		fmt.Println("☁️ Uploading portfolio snapshot, AI state, and DB to Cloudflare R2...")
 		snapFile := filepath.Join(dataDir, fmt.Sprintf("%s_snapshot.json", date))
 		latestFile := filepath.Join(dataDir, "latest_snapshot.json")
+		aiStateFile := filepath.Join(dataDir, "latest_ai_state.json")
+		aiDigestFile := filepath.Join(dataDir, "latest_ai_digest.md")
 
 		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, snapFile, fmt.Sprintf("portfolio/%s_snapshot.json", date))
 		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, latestFile, "portfolio/latest_snapshot.json")
+		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, aiStateFile, "portfolio/latest_ai_state.json")
+		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, aiDigestFile, "portfolio/latest_ai_digest.md")
 		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, dbPath, "db/portfolio_latest.sqlite")
 		fmt.Println("✓ Cloudflare R2 upload complete.")
 	}
@@ -292,7 +385,7 @@ func runAll(args []string) {
 
 func tryFallbackCache(targetFile, today, dataDir, source string) {
 	if _, err := os.Stat(targetFile); err == nil {
-		return // already exists
+		return
 	}
 	pattern := filepath.Join(dataDir, fmt.Sprintf("*_raw_%s.json", source))
 	if source == "alchemy" {
@@ -396,7 +489,6 @@ func runIntegrate(args []string) {
 
 	var allHoldings []models.Holding
 
-	// Load existing raw files
 	kseiPath := filepath.Join(dataDir, fmt.Sprintf("%s_raw_ksei.json", date))
 	if raw, err := os.ReadFile(kseiPath); err == nil {
 		var d ksei.RawKseiData
@@ -434,9 +526,12 @@ func runIntegrate(args []string) {
 		}
 	}
 
+	allHoldings = enricher.EnrichHoldings(allHoldings)
+
 	dbPath := filepath.Join(dataDir, "portfolio.db")
-	dbConn, _ := db.OpenDB(dbPath)
-	if dbConn != nil {
+	var dbConn *sql.DB
+	if conn, err := db.OpenDB(dbPath); err == nil {
+		dbConn = conn
 		defer dbConn.Close()
 	}
 
@@ -447,6 +542,132 @@ func runIntegrate(args []string) {
 	}
 
 	printSummary(snap)
+
+	// Generate AI state & digest
+	state, err := aistate.GenerateAIState(snap, dbConn)
+	if err == nil {
+		digestMD := aistate.GenerateAIDigestMarkdown(state)
+		_ = aistate.SaveAIState(state, digestMD, dataDir, dbConn)
+		advPayload := advisor.GenerateAdvisorPayload(snap, state, dbConn)
+		_ = advisor.SaveAdvisorPayload(advPayload, dataDir)
+		fmt.Println("✓ Generated latest_ai_state.json & latest_ai_digest.md")
+	}
+}
+
+func runAIState(args []string) {
+	dataDir, _ := filepath.Abs(getDataDir())
+	latestPath := filepath.Join(dataDir, "latest_snapshot.json")
+	data, err := os.ReadFile(latestPath)
+	if err != nil {
+		fmt.Printf("❌ Could not read latest_snapshot.json: %v\n", err)
+		os.Exit(1)
+	}
+	var snap models.Snapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		fmt.Printf("❌ Could not parse latest_snapshot.json: %v\n", err)
+		os.Exit(1)
+	}
+
+	dbPath := filepath.Join(dataDir, "portfolio.db")
+	var dbConn *sql.DB
+	if conn, err := db.OpenDB(dbPath); err == nil {
+		dbConn = conn
+		defer dbConn.Close()
+	}
+
+	state, err := aistate.GenerateAIState(&snap, dbConn)
+	if err != nil {
+		fmt.Printf("❌ Failed to generate AI state: %v\n", err)
+		os.Exit(1)
+	}
+	digestMD := aistate.GenerateAIDigestMarkdown(state)
+	if err := aistate.SaveAIState(state, digestMD, dataDir, dbConn); err != nil {
+		fmt.Printf("❌ Failed to save AI state: %v\n", err)
+		os.Exit(1)
+	}
+
+	advPayload := advisor.GenerateAdvisorPayload(&snap, state, dbConn)
+	_ = advisor.SaveAdvisorPayload(advPayload, dataDir)
+
+	fmt.Println("✨ Successfully refreshed latest_ai_state.json & latest_ai_digest.md")
+	fmt.Printf("   Net Worth: Rp %s ($%.2f)\n", formatIDR(state.MacroMetrics.NetWorthIDR), state.MacroMetrics.NetWorthUSD)
+	fmt.Printf("   Passive Cashflow: Rp %s/mo (FI Coverage: %.1f%%)\n",
+		formatIDR(state.PassiveIncome.ProjectedMonthlyPassiveIncomeIDR), state.PassiveIncome.FICoveragePct)
+	fmt.Printf("   ADHD 1-Step Directive: %s\n", state.ADHDFocusMetrics.DepositRouter.OneStepAction)
+}
+
+func runAdvisor(args []string) {
+	fs := flag.NewFlagSet("advisor", flag.ExitOnError)
+	mdFlag := fs.Bool("markdown", false, "Output non-ANSI Markdown briefing")
+	jsonFlag := fs.Bool("json", false, "Output structured JSON payload")
+	_ = fs.Parse(args)
+
+	dataDir, _ := filepath.Abs(getDataDir())
+	latestPath := filepath.Join(dataDir, "latest_snapshot.json")
+	data, err := os.ReadFile(latestPath)
+	if err != nil {
+		fmt.Printf("❌ Could not read latest_snapshot.json: %v\n", err)
+		os.Exit(1)
+	}
+	var snap models.Snapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		fmt.Printf("❌ Could not parse latest_snapshot.json: %v\n", err)
+		os.Exit(1)
+	}
+
+	dbPath := filepath.Join(dataDir, "portfolio.db")
+	var dbConn *sql.DB
+	if conn, err := db.OpenDB(dbPath); err == nil {
+		dbConn = conn
+		defer dbConn.Close()
+	}
+
+	state, _ := aistate.GenerateAIState(&snap, dbConn)
+	payload := advisor.GenerateAdvisorPayload(&snap, state, dbConn)
+
+	if *jsonFlag {
+		b, _ := json.MarshalIndent(payload, "", "  ")
+		fmt.Println(string(b))
+		return
+	}
+
+	if *mdFlag {
+		fmt.Println(advisor.GenerateMarkdownBriefing(payload))
+		return
+	}
+
+	// Default terminal report
+	fmt.Println("\n🏛️  SOVEREIGN RUNWAY & MACRO ADVISOR")
+	fmt.Println("=======================================================")
+	fmt.Printf("Date:             %s\n", payload.Date)
+	fmt.Printf("Net Worth:        Rp %s\n", formatIDR(payload.NetWorthIDR))
+	fmt.Printf("Liquid Reserves:  Rp %s (%.1f%% dry powder)\n", formatIDR(payload.DryPowderIDR), payload.DryPowderPct)
+	fmt.Printf("Runway Horizon:   %.1f Months [%s]\n", payload.RunwayMonths, payload.RunwayStatus)
+	fmt.Println("-------------------------------------------------------")
+	fmt.Printf("Directive: %s\n", payload.ActionSummary)
+	fmt.Println("-------------------------------------------------------")
+	fmt.Println("3-Tier Sovereign Runway Matrix:")
+	p := payload.SovereignAllocationPlan
+	fmt.Printf("  %-30s  Rp %-14s  (%.1f%%)\n", p.Tier1OperatingReserve.Name, formatIDR(p.Tier1OperatingReserve.AllocatedIDR), p.Tier1OperatingReserve.AllocationPct)
+	fmt.Printf("  %-30s  Rp %-14s  (%.1f%%)\n", p.Tier2FortressBuffer.Name, formatIDR(p.Tier2FortressBuffer.AllocatedIDR), p.Tier2FortressBuffer.AllocationPct)
+	fmt.Printf("  %-30s  Rp %-14s  (%.1f%%)\n", p.Tier3DeployableSurplus.Name, formatIDR(p.Tier3DeployableSurplus.AllocatedIDR), p.Tier3DeployableSurplus.AllocationPct)
+	fmt.Println("=======================================================")
+}
+
+func runMCP(args []string) {
+	dataDir, _ := filepath.Abs(getDataDir())
+	dbPath := filepath.Join(dataDir, "portfolio.db")
+	var dbConn *sql.DB
+	if conn, err := db.OpenDB(dbPath); err == nil {
+		dbConn = conn
+		defer dbConn.Close()
+	}
+
+	srv := mcp.NewServer(dataDir, dbConn)
+	if err := srv.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func runR2(args []string) {
