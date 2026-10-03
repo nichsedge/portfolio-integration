@@ -332,7 +332,7 @@ func printSummary(snap *models.Snapshot) {
 	for _, ac := range snap.Allocation.ByAssetClass {
 		fmt.Printf("  %-20s  Rp %-14s  (%5.1f%%)  [%d]\n", ac.AssetClass, formatIDR(ac.ValueIDR), ac.Percentage, ac.Count)
 	}
-	fmt.Println("=======================================================\n")
+	fmt.Println("=======================================================")
 }
 
 func formatIDR(v float64) string {
