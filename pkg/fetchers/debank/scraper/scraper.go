@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -203,6 +204,8 @@ func FindChromePath() string {
 	candidates := []string{
 		os.Getenv("CHROME_PATH"),
 		os.Getenv("BROWSER_PATH"),
+		"/data/data/com.termux/files/usr/bin/chromium",
+		"/data/data/com.termux/files/usr/bin/chromium-browser",
 		"/root/.cache/ms-playwright/chromium-1234/chrome-linux/chrome",
 		"/usr/bin/chromium",
 		"/usr/bin/chromium-browser",
@@ -214,6 +217,11 @@ func FindChromePath() string {
 			if _, err := os.Stat(p); err == nil {
 				return p
 			}
+		}
+	}
+	for _, name := range []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "headless-shell"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
 		}
 	}
 	return ""
@@ -260,6 +268,14 @@ func (s *Scraper) Scrape(ctx context.Context, address string) (*ScrapeResult, er
 		return nil, fmt.Errorf("invalid EVM address: address cannot be empty")
 	}
 
+	chromePath := s.cfg.ChromePath
+	if chromePath == "" {
+		chromePath = FindChromePath()
+	}
+	if chromePath == "" {
+		return nil, fmt.Errorf("Chromium/Chrome executable not found in PATH or environment")
+	}
+
 	profileURL := fmt.Sprintf("https://debank.com/profile/%s", addr)
 	log.Printf("Starting DeBank scrape for %s at %s", addr, profileURL)
 
@@ -272,16 +288,13 @@ func (s *Scraper) Scrape(ctx context.Context, address string) (*ScrapeResult, er
 		chromedp.Flag("disable-software-rasterizer", true),
 		chromedp.Flag("window-size", "1920,1080"),
 		chromedp.UserAgent(s.cfg.UserAgent),
+		chromedp.ExecPath(chromePath),
 	)
 
 	if s.cfg.Headless {
 		allocOpts = append(allocOpts, chromedp.Flag("headless", true))
 	} else {
 		allocOpts = append(allocOpts, chromedp.Flag("headless", false))
-	}
-
-	if s.cfg.ChromePath != "" {
-		allocOpts = append(allocOpts, chromedp.ExecPath(s.cfg.ChromePath))
 	}
 
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocOpts...)

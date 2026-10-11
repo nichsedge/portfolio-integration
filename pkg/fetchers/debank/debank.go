@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -61,9 +59,14 @@ func parseUSD(val interface{}) float64 {
 		return v
 	case int:
 		return float64(v)
+	case int64:
+		return float64(v)
 	case string:
 		clean := strings.ReplaceAll(v, "$", "")
 		clean = strings.ReplaceAll(clean, ",", "")
+		clean = strings.ReplaceAll(clean, "USD", "")
+		clean = strings.ReplaceAll(clean, "<", "")
+		clean = strings.ReplaceAll(clean, ">", "")
 		clean = strings.TrimSpace(clean)
 		f, _ := strconv.ParseFloat(clean, 64)
 		return f
@@ -80,8 +83,12 @@ func parseAmount(val interface{}) float64 {
 		return v
 	case int:
 		return float64(v)
+	case int64:
+		return float64(v)
 	case string:
 		clean := strings.ReplaceAll(v, ",", "")
+		clean = strings.ReplaceAll(clean, "<", "")
+		clean = strings.ReplaceAll(clean, ">", "")
 		clean = strings.TrimSpace(clean)
 		f, _ := strconv.ParseFloat(clean, 64)
 		return f
@@ -89,29 +96,13 @@ func parseAmount(val interface{}) float64 {
 	return 0.0
 }
 
-// Scrape invokes native chromedp scraper with fallback to external CLI if needed.
+// Scrape invokes native chromedp scraper.
 func Scrape(address, targetPath string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	s := scraper.New(scraper.Config{Headless: true})
-	if _, err := s.ScrapeToFile(ctx, address, targetPath); err == nil {
-		return nil
-	}
-
-	// Fallback to debank-scrape CLI if installed
-	binPath := filepath.Join(os.Getenv("HOME"), "go/bin/debank-scrape")
-	if _, err := os.Stat(binPath); err != nil {
-		var err2 error
-		binPath, err2 = exec.LookPath("debank-scrape")
-		if err2 != nil {
-			return fmt.Errorf("debank scraping failed and binary not found: %w", err)
-		}
-	}
-
-	cmd := exec.Command(binPath, address, "--output", targetPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	_, err := s.ScrapeToFile(ctx, address, targetPath)
+	return err
 }
 
 // LoadRaw loads and parses a raw DeBank JSON file.
@@ -132,6 +123,10 @@ func LoadRaw(path string) (*RawDebankData, []models.Holding, error) {
 
 // Standardize converts RawDebankData into standardized portfolio holdings.
 func Standardize(data *RawDebankData) []models.Holding {
+	if data == nil {
+		return nil
+	}
+
 	var holdings []models.Holding
 	usdThreshold := models.FilterThresholds["USD"]
 
@@ -155,8 +150,11 @@ func Standardize(data *RawDebankData) []models.Holding {
 			qty = parseAmount(t.Amount)
 		}
 		price := parseUSD(t.Price)
+		if price == 0 && qty > 0 && valUSD > 0 {
+			price = valUSD / qty
+		}
 
-		sym := t.Symbol
+		sym := strings.TrimSpace(t.Symbol)
 		if sym == "" {
 			sym = "Unknown"
 		}
@@ -164,6 +162,9 @@ func Standardize(data *RawDebankData) []models.Holding {
 		if existing, ok := tokenMap[sym]; ok {
 			existing.quantity += qty
 			existing.valueUSD += valUSD
+			if existing.quantity > 0 {
+				existing.price = existing.valueUSD / existing.quantity
+			}
 		} else {
 			tokenMap[sym] = &aggToken{
 				symbol:   sym,
@@ -196,7 +197,7 @@ func Standardize(data *RawDebankData) []models.Holding {
 
 	// 2. Process Protocols
 	for _, proto := range data.Protocols {
-		pName := proto.Name
+		pName := strings.TrimSpace(proto.Name)
 		if pName == "" {
 			pName = "Unknown"
 		}
@@ -209,22 +210,31 @@ func Standardize(data *RawDebankData) []models.Holding {
 				}
 
 				poolStr := "Unknown Pool"
-				if s, ok := pos.Pool.(string); ok {
-					poolStr = s
+				if s, ok := pos.Pool.(string); ok && strings.TrimSpace(s) != "" {
+					poolStr = strings.TrimSpace(s)
 				}
 
-				posType := pos.Type
+				posType := strings.TrimSpace(pos.Type)
 				if posType == "" {
 					posType = "Protocol"
 				}
 
 				cat := "Yield / LP"
-				if posType == "Staked" {
+				posTypeLower := strings.ToLower(posType)
+				if strings.Contains(posTypeLower, "borrow") || strings.Contains(posTypeLower, "debt") {
+					cat = "Liabilities"
+				} else if strings.Contains(posTypeLower, "staked") {
 					cat = "Staked"
 				}
 
 				assetName := fmt.Sprintf("%s - %s", pName, poolStr)
-				if posType != "" && posType != "Other" && posType != "Protocol" {
+				if poolStr == "Unknown Pool" {
+					if posType != "Protocol" && posType != "Other" {
+						assetName = fmt.Sprintf("%s (%s)", pName, posType)
+					} else {
+						assetName = pName
+					}
+				} else if posType != "" && posType != "Other" && posType != "Protocol" {
 					assetName = fmt.Sprintf("%s (%s) - %s", pName, posType, poolStr)
 				}
 				assetName = strings.ReplaceAll(assetName, "\n", " ")
@@ -257,9 +267,10 @@ func Standardize(data *RawDebankData) []models.Holding {
 			if valUSD >= usdThreshold {
 				p := valUSD
 				vUSD := valUSD
+				cat := "Yield / LP"
 				holdings = append(holdings, models.Holding{
 					Source:     "EVM Wallet",
-					Category:   "Yield / LP",
+					Category:   cat,
 					Asset:      pName,
 					Name:       pName,
 					Currency:   "USD",
@@ -268,7 +279,7 @@ func Standardize(data *RawDebankData) []models.Holding {
 					ValueUSD:   &vUSD,
 					Account:    "DeBank Protocol",
 					Details:    fmt.Sprintf("Protocol: %s (Summary)", pName),
-					AssetClass: "Crypto",
+					AssetClass: models.GetAssetClass(cat),
 				})
 			}
 		}
@@ -285,9 +296,10 @@ func Standardize(data *RawDebankData) []models.Holding {
 		if valUSD >= usdThreshold {
 			p := avgPrice
 			vUSD := valUSD
+			cat := "Spot"
 			holdings = append(holdings, models.Holding{
 				Source:     "EVM Wallet",
-				Category:   "Spot",
+				Category:   cat,
 				Asset:      nft.Collection,
 				Name:       nft.Collection,
 				Currency:   "USD",
@@ -296,7 +308,7 @@ func Standardize(data *RawDebankData) []models.Holding {
 				ValueUSD:   &vUSD,
 				Account:    "DeBank NFT",
 				Details:    fmt.Sprintf("Collection: %s", nft.Collection),
-				AssetClass: "Crypto",
+				AssetClass: models.GetAssetClass(cat),
 			})
 		}
 	}

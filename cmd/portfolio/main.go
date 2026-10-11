@@ -230,7 +230,13 @@ func runAll(args []string) {
 	// 3. Fetch Binance
 	fmt.Print("⏳ [3/5] Fetching Binance... ")
 	binKey := os.Getenv("BINANCE_API_KEY")
+	if binKey == "" {
+		binKey = os.Getenv("BINANCE_KEY")
+	}
 	binSec := os.Getenv("BINANCE_API_SECRET")
+	if binSec == "" {
+		binSec = os.Getenv("BINANCE_SECRET")
+	}
 	rawBinPath := filepath.Join(dataDir, fmt.Sprintf("%s_raw_binance.json", date))
 	if binKey != "" && binSec != "" {
 		rawBin, binHoldings, err := binance.Fetch(binKey, binSec)
@@ -269,7 +275,7 @@ func runAll(args []string) {
 	alchKey := os.Getenv("ALCHEMY_API_KEY")
 	rawAlchPath := filepath.Join(dataDir, fmt.Sprintf("%s_curated_alchemy.json", date))
 	if solAddr != "" && alchKey != "" {
-		rawAlch, alchHoldings, err := alchemy.Fetch(solAddr, alchKey)
+		rawAlch, alchHoldings, err := alchemy.Fetch(alchKey, solAddr)
 		if err == nil {
 			_ = alchemy.SaveCurated(rawAlch, rawAlchPath)
 			allHoldings = append(allHoldings, alchHoldings...)
@@ -406,8 +412,10 @@ func tryFallbackCache(targetFile, today, dataDir, source string) {
 		if err == nil {
 			_ = os.WriteFile(targetFile, content, 0644)
 			fmt.Printf("  ↳ Reused cache from %s\n", filepath.Base(latestMatch))
+			return
 		}
 	}
+	fmt.Println("  ↳ No previous cache found")
 }
 
 func printSummary(snap *models.Snapshot) {
@@ -473,6 +481,48 @@ func runFetch(args []string) {
 		target := filepath.Join(dataDir, fmt.Sprintf("%s_raw_sansfinance.json", date))
 		_ = sansfinance.SaveRaw(raw, target)
 		fmt.Printf("✓ Saved to %s\n", target)
+	case "binance":
+		binKey := os.Getenv("BINANCE_API_KEY")
+		if binKey == "" {
+			binKey = os.Getenv("BINANCE_KEY")
+		}
+		binSec := os.Getenv("BINANCE_API_SECRET")
+		if binSec == "" {
+			binSec = os.Getenv("BINANCE_SECRET")
+		}
+		raw, holdings, err := binance.Fetch(binKey, binSec)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		target := filepath.Join(dataDir, fmt.Sprintf("%s_raw_binance.json", date))
+		_ = binance.SaveRaw(raw, target)
+		fmt.Printf("✓ Saved %d balances to %s\n", len(holdings), target)
+	case "alchemy":
+		solAddr := os.Getenv("SOL_ADDRESS")
+		alchKey := os.Getenv("ALCHEMY_API_KEY")
+		raw, holdings, err := alchemy.Fetch(alchKey, solAddr)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		target := filepath.Join(dataDir, fmt.Sprintf("%s_curated_alchemy.json", date))
+		_ = alchemy.SaveCurated(raw, target)
+		fmt.Printf("✓ Saved %d tokens to %s\n", len(holdings), target)
+	case "debank":
+		ethAddr := os.Getenv("ETH_ADDRESS")
+		target := filepath.Join(dataDir, fmt.Sprintf("%s_raw_debank.json", date))
+		err := debank.Scrape(ethAddr, target)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		_, holdings, err := debank.LoadRaw(target)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✓ Saved %d assets to %s\n", len(holdings), target)
 	default:
 		fmt.Printf("Fetch for %s not implemented or run via run-all\n", args[0])
 	}
