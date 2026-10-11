@@ -377,11 +377,13 @@ func runAll(args []string) {
 		latestFile := filepath.Join(dataDir, "latest_snapshot.json")
 		aiStateFile := filepath.Join(dataDir, "latest_ai_state.json")
 		aiDigestFile := filepath.Join(dataDir, "latest_ai_digest.md")
+		advisorFile := filepath.Join(dataDir, "latest_advisor.json")
 
 		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, snapFile, fmt.Sprintf("portfolio/%s_snapshot.json", date))
 		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, latestFile, "portfolio/latest_snapshot.json")
 		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, aiStateFile, "portfolio/latest_ai_state.json")
 		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, aiDigestFile, "portfolio/latest_ai_digest.md")
+		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, advisorFile, "portfolio/latest_advisor.json")
 		_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, dbPath, "db/portfolio_latest.sqlite")
 		fmt.Println("✓ Cloudflare R2 upload complete.")
 	}
