@@ -39,26 +39,30 @@ func GetExchangeRate(dataDir string) float64 {
 	// 2. Fetch from open.er-api.com
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get("https://open.er-api.com/v6/latest/USD")
-	if err == nil && resp.StatusCode == http.StatusOK {
+	if err == nil {
 		defer resp.Body.Close()
-		var res openExchangeResp
-		if err := json.NewDecoder(resp.Body).Decode(&res); err == nil {
-			if rate, ok := res.Rates["IDR"]; ok && rate > 10000 {
-				saveCache(cachePath, rate)
-				return rate
+		if resp.StatusCode == http.StatusOK {
+			var res openExchangeResp
+			if err := json.NewDecoder(resp.Body).Decode(&res); err == nil {
+				if rate, ok := res.Rates["IDR"]; ok && rate > 10000 {
+					saveCache(cachePath, rate)
+					return rate
+				}
 			}
 		}
 	}
 
 	// 3. Fallback to Frankfurter API
 	resp2, err := client.Get("https://api.frankfurter.dev/v1/latest?base=USD&symbols=IDR")
-	if err == nil && resp2.StatusCode == http.StatusOK {
+	if err == nil {
 		defer resp2.Body.Close()
-		var res frankfurterResp
-		if err := json.NewDecoder(resp2.Body).Decode(&res); err == nil {
-			if rate, ok := res.Rates["IDR"]; ok && rate > 10000 {
-				saveCache(cachePath, rate)
-				return rate
+		if resp2.StatusCode == http.StatusOK {
+			var res frankfurterResp
+			if err := json.NewDecoder(resp2.Body).Decode(&res); err == nil {
+				if rate, ok := res.Rates["IDR"]; ok && rate > 10000 {
+					saveCache(cachePath, rate)
+					return rate
+				}
 			}
 		}
 	}

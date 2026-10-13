@@ -870,14 +870,5 @@ func SaveAIState(state *AIState, digestMD string, dataDir string, dbConn *sql.DB
 }
 
 func formatNumber(v float64) string {
-	s := fmt.Sprintf("%.0f", v)
-	var parts []string
-	for len(s) > 3 {
-		parts = append([]string{s[len(s)-3:]}, parts...)
-		s = s[:len(s)-3]
-	}
-	if len(s) > 0 {
-		parts = append([]string{s}, parts...)
-	}
-	return strings.Join(parts, ",")
+	return models.FormatNumber(v)
 }

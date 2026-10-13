@@ -28,6 +28,11 @@ func TestEnrichHoldings(t *testing.T) {
 			Category:   "Other",
 			AssetClass: "Other",
 		},
+		{
+			Asset:      "SUKUK TABUNGAN SERI ST014T4",
+			Category:   "SBN",
+			AssetClass: "Fixed Income",
+		},
 	}
 
 	enriched := EnrichHoldings(holdings)
@@ -50,5 +55,10 @@ func TestEnrichHoldings(t *testing.T) {
 	// Unknown should have nil
 	if enriched[3].YieldRate != nil {
 		t.Fatalf("expected unknown asset yield rate nil, got %v", enriched[3].YieldRate)
+	}
+
+	// ST014T4 should have 0.0650 (6.5%)
+	if enriched[4].YieldRate == nil || *enriched[4].YieldRate != 0.0650 {
+		t.Fatalf("expected ST014T4 yield rate 0.0650, got %v", enriched[4].YieldRate)
 	}
 }

@@ -1,6 +1,7 @@
 package enricher
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/nichsedge/portfolio-integration/pkg/models"
@@ -55,6 +56,23 @@ const (
 	DefaultStakedYield = 0.0500
 )
 
+// Sorted registry keys in descending order of length to guarantee deterministic matching
+var sortedSBNKeys []string
+
+func init() {
+	sortedSBNKeys = make([]string, 0, len(SBNRegistry))
+	for k := range SBNRegistry {
+		sortedSBNKeys = append(sortedSBNKeys, k)
+	}
+	// Sort descending by length first, then alphabetical for equal lengths
+	sort.Slice(sortedSBNKeys, func(i, j int) bool {
+		if len(sortedSBNKeys[i]) != len(sortedSBNKeys[j]) {
+			return len(sortedSBNKeys[i]) > len(sortedSBNKeys[j])
+		}
+		return sortedSBNKeys[i] < sortedSBNKeys[j]
+	})
+}
+
 // EnrichHoldings populates yield_rate for all holdings based on asset class, category, and asset symbol.
 func EnrichHoldings(holdings []models.Holding) []models.Holding {
 	for i := range holdings {
@@ -71,9 +89,9 @@ func EnrichHoldings(holdings []models.Holding) []models.Holding {
 		// 1. Sovereign Sukuk / Bonds
 		if cat == "SBN" || cat == "Corporate Bond" || strings.Contains(cat, "Bond") || strings.Contains(assetUpper, "SUKUK") {
 			rate := DefaultSBNYield
-			for code, r := range SBNRegistry {
+			for _, code := range sortedSBNKeys {
 				if strings.Contains(assetUpper, code) {
-					rate = r
+					rate = SBNRegistry[code]
 					break
 				}
 			}

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -175,4 +176,18 @@ func GetAssetClass(category string) string {
 	}
 
 	return "Other"
+}
+
+// FormatNumber formats a floating point amount with comma thousands separators.
+func FormatNumber(v float64) string {
+	s := fmt.Sprintf("%.0f", v)
+	var parts []string
+	for len(s) > 3 {
+		parts = append([]string{s[len(s)-3:]}, parts...)
+		s = s[:len(s)-3]
+	}
+	if len(s) > 0 {
+		parts = append([]string{s}, parts...)
+	}
+	return strings.Join(parts, ",")
 }
