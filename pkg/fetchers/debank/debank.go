@@ -180,7 +180,7 @@ func Standardize(data *RawDebankData) []models.Holding {
 		p := agg.price
 		vUSD := agg.valueUSD
 		holdings = append(holdings, models.Holding{
-			Source:     "EVM Wallet",
+			Source:     "debank",
 			Category:   cat,
 			Asset:      agg.symbol,
 			Ticker:     agg.symbol,
@@ -249,7 +249,7 @@ func Standardize(data *RawDebankData) []models.Holding {
 				p := valUSD
 				vUSD := valUSD
 				holdings = append(holdings, models.Holding{
-					Source:     "EVM Wallet",
+					Source:     "debank",
 					Category:   cat,
 					Asset:      assetName,
 					Name:       assetName,
@@ -269,7 +269,7 @@ func Standardize(data *RawDebankData) []models.Holding {
 				vUSD := valUSD
 				cat := "Yield / LP"
 				holdings = append(holdings, models.Holding{
-					Source:     "EVM Wallet",
+					Source:     "debank",
 					Category:   cat,
 					Asset:      pName,
 					Name:       pName,
@@ -298,7 +298,7 @@ func Standardize(data *RawDebankData) []models.Holding {
 			vUSD := valUSD
 			cat := "Spot"
 			holdings = append(holdings, models.Holding{
-				Source:     "EVM Wallet",
+				Source:     "debank",
 				Category:   cat,
 				Asset:      nft.Collection,
 				Name:       nft.Collection,

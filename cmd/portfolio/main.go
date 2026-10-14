@@ -162,27 +162,11 @@ func runAll(args []string) {
 			fmt.Printf("✓ %d holdings\n", len(kseiHoldings))
 		} else {
 			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
-			tryFallbackCache(rawKseiPath, date, dataDir, "ksei")
-			if raw, err := os.ReadFile(rawKseiPath); err == nil {
-				var d ksei.RawKseiData
-				if json.Unmarshal(raw, &d) == nil {
-					h := ksei.Standardize(&d)
-					allHoldings = append(allHoldings, h...)
-					fmt.Printf("✓ loaded %d cached holdings\n", len(h))
-				}
-			}
+			allHoldings = append(allHoldings, loadCachedHoldings(rawKseiPath, date, dataDir, "ksei", ksei.Standardize)...)
 		}
 	} else {
 		fmt.Println("⚠️ (no credentials) - checking cache fallback")
-		tryFallbackCache(rawKseiPath, date, dataDir, "ksei")
-		if raw, err := os.ReadFile(rawKseiPath); err == nil {
-			var d ksei.RawKseiData
-			if json.Unmarshal(raw, &d) == nil {
-				h := ksei.Standardize(&d)
-				allHoldings = append(allHoldings, h...)
-				fmt.Printf("✓ loaded %d cached holdings\n", len(h))
-			}
-		}
+		allHoldings = append(allHoldings, loadCachedHoldings(rawKseiPath, date, dataDir, "ksei", ksei.Standardize)...)
 	}
 
 	// 2. Fetch SansFinance
@@ -204,27 +188,11 @@ func runAll(args []string) {
 			fmt.Printf("✓ %d accounts\n", len(sansHoldings))
 		} else {
 			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
-			tryFallbackCache(rawSansPath, date, dataDir, "sansfinance")
-			if raw, err := os.ReadFile(rawSansPath); err == nil {
-				var d sansfinance.RawSansfinanceData
-				if json.Unmarshal(raw, &d) == nil {
-					h := sansfinance.Standardize(&d)
-					allHoldings = append(allHoldings, h...)
-					fmt.Printf("✓ loaded %d cached accounts\n", len(h))
-				}
-			}
+			allHoldings = append(allHoldings, loadCachedHoldings(rawSansPath, date, dataDir, "sansfinance", sansfinance.Standardize)...)
 		}
 	} else {
 		fmt.Println("⚠️ (no R2 creds) - checking cache fallback")
-		tryFallbackCache(rawSansPath, date, dataDir, "sansfinance")
-		if raw, err := os.ReadFile(rawSansPath); err == nil {
-			var d sansfinance.RawSansfinanceData
-			if json.Unmarshal(raw, &d) == nil {
-				h := sansfinance.Standardize(&d)
-				allHoldings = append(allHoldings, h...)
-				fmt.Printf("✓ loaded %d cached accounts\n", len(h))
-			}
-		}
+		allHoldings = append(allHoldings, loadCachedHoldings(rawSansPath, date, dataDir, "sansfinance", sansfinance.Standardize)...)
 	}
 
 	// 3. Fetch Binance
@@ -246,27 +214,11 @@ func runAll(args []string) {
 			fmt.Printf("✓ %d balances\n", len(binHoldings))
 		} else {
 			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
-			tryFallbackCache(rawBinPath, date, dataDir, "binance")
-			if raw, err := os.ReadFile(rawBinPath); err == nil {
-				var d binance.RawBinanceData
-				if json.Unmarshal(raw, &d) == nil {
-					h := binance.Standardize(&d)
-					allHoldings = append(allHoldings, h...)
-					fmt.Printf("✓ loaded %d cached balances\n", len(h))
-				}
-			}
+			allHoldings = append(allHoldings, loadCachedHoldings(rawBinPath, date, dataDir, "binance", binance.Standardize)...)
 		}
 	} else {
 		fmt.Println("⚠️ (no credentials) - checking cache fallback")
-		tryFallbackCache(rawBinPath, date, dataDir, "binance")
-		if raw, err := os.ReadFile(rawBinPath); err == nil {
-			var d binance.RawBinanceData
-			if json.Unmarshal(raw, &d) == nil {
-				h := binance.Standardize(&d)
-				allHoldings = append(allHoldings, h...)
-				fmt.Printf("✓ loaded %d cached balances\n", len(h))
-			}
-		}
+		allHoldings = append(allHoldings, loadCachedHoldings(rawBinPath, date, dataDir, "binance", binance.Standardize)...)
 	}
 
 	// 4. Fetch Alchemy (Solana)
@@ -282,27 +234,11 @@ func runAll(args []string) {
 			fmt.Printf("✓ %d tokens\n", len(alchHoldings))
 		} else {
 			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
-			tryFallbackCache(rawAlchPath, date, dataDir, "alchemy")
-			if raw, err := os.ReadFile(rawAlchPath); err == nil {
-				var d alchemy.CuratedAlchemyData
-				if json.Unmarshal(raw, &d) == nil {
-					h := alchemy.Standardize(&d)
-					allHoldings = append(allHoldings, h...)
-					fmt.Printf("✓ loaded %d cached tokens\n", len(h))
-				}
-			}
+			allHoldings = append(allHoldings, loadCachedHoldings(rawAlchPath, date, dataDir, "alchemy", alchemy.Standardize)...)
 		}
 	} else {
 		fmt.Println("⚠️ (no SOL credentials) - checking cache fallback")
-		tryFallbackCache(rawAlchPath, date, dataDir, "alchemy")
-		if raw, err := os.ReadFile(rawAlchPath); err == nil {
-			var d alchemy.CuratedAlchemyData
-			if json.Unmarshal(raw, &d) == nil {
-				h := alchemy.Standardize(&d)
-				allHoldings = append(allHoldings, h...)
-				fmt.Printf("✓ loaded %d cached tokens\n", len(h))
-			}
-		}
+		allHoldings = append(allHoldings, loadCachedHoldings(rawAlchPath, date, dataDir, "alchemy", alchemy.Standardize)...)
 	}
 
 	// 5. Fetch DeBank
@@ -318,19 +254,11 @@ func runAll(args []string) {
 			}
 		} else {
 			fmt.Printf("⚠️ (%v) - checking cache fallback\n", err)
-			tryFallbackCache(rawDebankPath, date, dataDir, "debank")
-			if _, dHoldings, err := debank.LoadRaw(rawDebankPath); err == nil {
-				allHoldings = append(allHoldings, dHoldings...)
-				fmt.Printf("✓ loaded %d cached holdings\n", len(dHoldings))
-			}
+			allHoldings = append(allHoldings, loadCachedDebankHoldings(rawDebankPath, date, dataDir)...)
 		}
 	} else {
 		fmt.Println("⚠️ (no ETH_ADDRESS) - checking cache fallback")
-		tryFallbackCache(rawDebankPath, date, dataDir, "debank")
-		if _, dHoldings, err := debank.LoadRaw(rawDebankPath); err == nil {
-			allHoldings = append(allHoldings, dHoldings...)
-			fmt.Printf("✓ loaded %d cached holdings\n", len(dHoldings))
-		}
+		allHoldings = append(allHoldings, loadCachedDebankHoldings(rawDebankPath, date, dataDir)...)
 	}
 
 	// Step 6: Yield Enrichment & Integration
@@ -418,6 +346,34 @@ func tryFallbackCache(targetFile, today, dataDir, source string) {
 		}
 	}
 	fmt.Println("  ↳ No previous cache found")
+}
+
+func loadCachedHoldings[T any](targetPath, date, dataDir, source string, standardize func(*T) []models.Holding) []models.Holding {
+	tryFallbackCache(targetPath, date, dataDir, source)
+	raw, err := os.ReadFile(targetPath)
+	if err != nil {
+		return nil
+	}
+	var data T
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil
+	}
+	h := standardize(&data)
+	if len(h) > 0 {
+		fmt.Printf("✓ loaded %d cached holdings\n", len(h))
+	}
+	return h
+}
+
+func loadCachedDebankHoldings(targetPath, date, dataDir string) []models.Holding {
+	tryFallbackCache(targetPath, date, dataDir, "debank")
+	if _, dHoldings, err := debank.LoadRaw(targetPath); err == nil {
+		if len(dHoldings) > 0 {
+			fmt.Printf("✓ loaded %d cached holdings\n", len(dHoldings))
+		}
+		return dHoldings
+	}
+	return nil
 }
 
 func printSummary(snap *models.Snapshot) {

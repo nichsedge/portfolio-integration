@@ -70,8 +70,8 @@ func TestStandardizeTokens(t *testing.T) {
 			if *h.Price != 1.0 {
 				t.Errorf("expected USDT price 1.0, got %f", *h.Price)
 			}
-			if h.Source != "EVM Wallet" {
-				t.Errorf("expected source EVM Wallet, got %s", h.Source)
+			if h.Source != "debank" {
+				t.Errorf("expected source debank, got %s", h.Source)
 			}
 		}
 		if h.Asset == "ETH" {

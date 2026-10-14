@@ -172,7 +172,7 @@ func Standardize(data *CuratedAlchemyData) []models.Holding {
 		valUSD := a.ValueUSD
 
 		holdings = append(holdings, models.Holding{
-			Source:     "SOL Wallet",
+			Source:     "alchemy",
 			Category:   category,
 			Asset:      a.Symbol,
 			Ticker:     a.Symbol,

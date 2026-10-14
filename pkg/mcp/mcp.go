@@ -206,8 +206,12 @@ func (s *Server) handleRequest(req *JSONRPCRequest) {
 		s.sendResult(req.ID, ToolResult{
 			Content: []TextContent{{Type: "text", Text: res}},
 		})
+	case "ping":
+		s.sendResult(req.ID, map[string]interface{}{})
 	default:
-		s.sendError(req.ID, -32601, fmt.Sprintf("Method '%s' not found", req.Method))
+		if req.ID != nil {
+			s.sendError(req.ID, -32601, fmt.Sprintf("Method '%s' not found", req.Method))
+		}
 	}
 }
 
@@ -280,8 +284,20 @@ func (s *Server) callTool(name string, args map[string]interface{}) (string, err
 			if acFilter != "" && !strings.EqualFold(h.AssetClass, acFilter) {
 				continue
 			}
-			if srcFilter != "" && !strings.EqualFold(h.Source, srcFilter) {
-				continue
+			if srcFilter != "" {
+				src := strings.ToLower(srcFilter)
+				hSrc := strings.ToLower(h.Source)
+				if src == "debank" || src == "evm" {
+					if hSrc != "debank" && hSrc != "evm wallet" {
+						continue
+					}
+				} else if src == "alchemy" || src == "sol" || src == "solana" {
+					if hSrc != "alchemy" && hSrc != "sol wallet" {
+						continue
+					}
+				} else if !strings.EqualFold(h.Source, srcFilter) {
+					continue
+				}
 			}
 			filtered = append(filtered, h)
 		}

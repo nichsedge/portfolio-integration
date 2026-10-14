@@ -128,18 +128,25 @@ func Fetch(apiKey, secret string) (*RawBinanceData, []models.Holding, error) {
 	req, _ := http.NewRequest(http.MethodGet, spotURL, nil)
 	req.Header.Set("X-MBX-APIKEY", apiKey)
 
-	if resp, err := client.Do(req); err == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
-		var spot SpotAccountResp
-		if err := json.NewDecoder(resp.Body).Decode(&spot); err == nil {
-			for _, b := range spot.Balances {
-				free, _ := strconv.ParseFloat(b.Free, 64)
-				locked, _ := strconv.ParseFloat(b.Locked, 64)
-				tot := free + locked
-				if tot > 0 {
-					balances[b.Asset] += tot
-				}
-			}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch Binance spot balances: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, nil, fmt.Errorf("binance spot API error (status %d): %s", resp.StatusCode, string(body))
+	}
+	var spot SpotAccountResp
+	if err := json.NewDecoder(resp.Body).Decode(&spot); err != nil {
+		return nil, nil, fmt.Errorf("failed to decode Binance spot balances: %w", err)
+	}
+	for _, b := range spot.Balances {
+		free, _ := strconv.ParseFloat(b.Free, 64)
+		locked, _ := strconv.ParseFloat(b.Locked, 64)
+		tot := free + locked
+		if tot > 0 {
+			balances[b.Asset] += tot
 		}
 	}
 
@@ -195,22 +202,28 @@ func Fetch(apiKey, secret string) (*RawBinanceData, []models.Holding, error) {
 	}
 
 	tickerURL := "https://api.binance.com/api/v3/ticker/price"
-	if resp, err := client.Get(tickerURL); err == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		var tickers []TickerPrice
-		if err := json.Unmarshal(body, &tickers); err == nil {
-			for _, t := range tickers {
-				p, _ := strconv.ParseFloat(t.Price, 64)
-				if strings.HasSuffix(t.Symbol, "USDT") {
-					base := strings.TrimSuffix(t.Symbol, "USDT")
-					prices[base] = p
-				} else if strings.HasSuffix(t.Symbol, "USDC") {
-					base := strings.TrimSuffix(t.Symbol, "USDC")
-					if _, ok := prices[base]; !ok {
-						prices[base] = p
-					}
-				}
+	respTick, err := client.Get(tickerURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch Binance ticker prices: %w", err)
+	}
+	defer respTick.Body.Close()
+	if respTick.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(respTick.Body)
+		return nil, nil, fmt.Errorf("binance ticker prices error (%d): %s", respTick.StatusCode, string(body))
+	}
+	var tickers []TickerPrice
+	if err := json.NewDecoder(respTick.Body).Decode(&tickers); err != nil {
+		return nil, nil, fmt.Errorf("failed to decode Binance tickers: %w", err)
+	}
+	for _, t := range tickers {
+		p, _ := strconv.ParseFloat(t.Price, 64)
+		if strings.HasSuffix(t.Symbol, "USDT") {
+			base := strings.TrimSuffix(t.Symbol, "USDT")
+			prices[base] = p
+		} else if strings.HasSuffix(t.Symbol, "USDC") {
+			base := strings.TrimSuffix(t.Symbol, "USDC")
+			if _, ok := prices[base]; !ok {
+				prices[base] = p
 			}
 		}
 	}

@@ -85,11 +85,21 @@ func UploadFile(accountID, accessKey, secretKey, bucket, localPath, r2Key string
 		if resp.StatusCode == http.StatusOK {
 			return nil
 		}
+		body, _ := io.ReadAll(resp.Body)
+		if _, pathErr := exec.LookPath("wrangler"); pathErr == nil {
+			cmd := exec.Command("wrangler", "r2", "object", "put", fmt.Sprintf("%s/%s", bucket, r2Key), fmt.Sprintf("--file=%s", localPath), "--remote")
+			if wErr := cmd.Run(); wErr == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("R2 PUT %s failed (status %d): %s", r2Key, resp.StatusCode, string(body))
 	}
 
-	// Fallback to wrangler if direct upload fails
-	cmd := exec.Command("wrangler", "r2", "object", "put", fmt.Sprintf("%s/%s", bucket, r2Key), fmt.Sprintf("--file=%s", localPath), "--remote")
-	return cmd.Run()
+	if _, pathErr := exec.LookPath("wrangler"); pathErr == nil {
+		cmd := exec.Command("wrangler", "r2", "object", "put", fmt.Sprintf("%s/%s", bucket, r2Key), fmt.Sprintf("--file=%s", localPath), "--remote")
+		return cmd.Run()
+	}
+	return fmt.Errorf("failed to upload to R2 (%s): %w", r2Key, err)
 }
 
 // DownloadFile downloads a file from Cloudflare R2 using S3 SigV4 GET with wrangler fallback.
@@ -144,9 +154,19 @@ func DownloadFile(accountID, accessKey, secretKey, bucket, r2Key, destPath strin
 			_, copyErr := io.Copy(out, resp.Body)
 			return copyErr
 		}
+		body, _ := io.ReadAll(resp.Body)
+		if _, pathErr := exec.LookPath("wrangler"); pathErr == nil {
+			cmd := exec.Command("wrangler", "r2", "object", "get", fmt.Sprintf("%s/%s", bucket, r2Key), fmt.Sprintf("--file=%s", destPath), "--remote")
+			if wErr := cmd.Run(); wErr == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("R2 GET %s failed (status %d): %s", r2Key, resp.StatusCode, string(body))
 	}
 
-	// Fallback to wrangler if direct download fails
-	cmd := exec.Command("wrangler", "r2", "object", "get", fmt.Sprintf("%s/%s", bucket, r2Key), fmt.Sprintf("--file=%s", destPath), "--remote")
-	return cmd.Run()
+	if _, pathErr := exec.LookPath("wrangler"); pathErr == nil {
+		cmd := exec.Command("wrangler", "r2", "object", "get", fmt.Sprintf("%s/%s", bucket, r2Key), fmt.Sprintf("--file=%s", destPath), "--remote")
+		return cmd.Run()
+	}
+	return fmt.Errorf("failed to download from R2 (%s): %w", r2Key, err)
 }

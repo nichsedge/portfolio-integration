@@ -55,7 +55,7 @@ func Integrate(date string, allHoldings []models.Holding, exchangeRate float64, 
 	var investmentsData []models.Holding
 	var liquidCashAccounts []models.Holding
 	for _, h := range allHoldings {
-		if strings.ToLower(h.Source) == "sansfinance" {
+		if strings.ToLower(h.Source) == "sansfinance" && h.Category != "P2P Lending" {
 			liquidCashAccounts = append(liquidCashAccounts, h)
 		} else {
 			investmentsData = append(investmentsData, h)
