@@ -1,7 +1,9 @@
 # Data & Local database
 data/*
 !data/.gitkeep
+*.db
 bin/
+
 
 # Environment variables & secrets
 .env
