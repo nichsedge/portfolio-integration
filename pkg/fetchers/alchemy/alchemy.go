@@ -277,11 +277,12 @@ func Fetch(apiKey, walletAddress string) (*CuratedAlchemyData, []models.Holding,
 		name := t.TokenMetadata.Name
 
 		// Handle native SOL where Alchemy leaves tokenAddress null/empty and symbol/name empty
-		if (t.TokenAddress == "" || t.TokenAddress == "null") && strings.Contains(strings.ToLower(t.Network), "solana") {
-			if symbol == "" {
+		// Handle native SOL where Alchemy leaves tokenAddress null/empty and symbol/name empty or UNKNOWN
+		if (t.TokenAddress == "" || t.TokenAddress == "null") && (strings.Contains(strings.ToLower(t.Network), "solana") || t.Network == "") {
+			if symbol == "" || symbol == "UNKNOWN" {
 				symbol = "SOL"
 			}
-			if name == "" {
+			if name == "" || name == "UNKNOWN" {
 				name = "Solana"
 			}
 		}
@@ -378,7 +379,7 @@ func Standardize(data *CuratedAlchemyData) []models.Holding {
 
 		symbol := a.Symbol
 		name := a.Name
-		if (symbol == "UNKNOWN" || symbol == "") && (a.TokenAddress == "" || a.TokenAddress == "null") {
+		if (symbol == "UNKNOWN" || symbol == "") && (a.TokenAddress == "" || a.TokenAddress == "null" || strings.Contains(strings.ToLower(a.Network), "solana")) {
 			symbol = "SOL"
 			name = "Solana"
 		}

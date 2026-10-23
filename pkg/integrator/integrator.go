@@ -38,6 +38,13 @@ func Integrate(date string, allHoldings []models.Holding, exchangeRate float64, 
 		if h.AssetClass == "" {
 			h.AssetClass = models.GetAssetClass(h.Category)
 		}
+		if (h.Asset == "UNKNOWN" || h.Asset == "") && (strings.Contains(strings.ToLower(h.Source), "sol") || strings.Contains(strings.ToLower(h.Source), "alchemy")) {
+			h.Asset = "SOL"
+			h.Ticker = "SOL"
+			if h.Name == "" || h.Name == "UNKNOWN" {
+				h.Name = "Solana"
+			}
+		}
 	}
 
 	// Sort holdings consistently

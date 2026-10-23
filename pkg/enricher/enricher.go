@@ -78,6 +78,16 @@ func init() {
 func EnrichHoldings(holdings []models.Holding) []models.Holding {
 	for i := range holdings {
 		h := &holdings[i]
+
+		// Ensure native Solana asset resolution
+		if (h.Asset == "UNKNOWN" || h.Asset == "") && (strings.Contains(strings.ToLower(h.Source), "sol") || strings.Contains(strings.ToLower(h.Source), "alchemy")) {
+			h.Asset = "SOL"
+			h.Ticker = "SOL"
+			if h.Name == "" || h.Name == "UNKNOWN" {
+				h.Name = "Solana"
+			}
+		}
+
 		if h.YieldRate != nil && *h.YieldRate > 0 {
 			continue
 		}
