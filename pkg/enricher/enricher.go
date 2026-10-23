@@ -30,13 +30,14 @@ var SBNRegistry = map[string]float64{
 }
 
 var CryptoStakingRates = map[string]float64{
-	"SOL":  0.0680,
-	"ETH":  0.0320,
-	"DOT":  0.1150,
-	"ATOM": 0.1350,
-	"NEAR": 0.0750,
-	"SUI":  0.0350,
-	"ADA":  0.0280,
+	"SOL":   0.0680,
+	"ETH":   0.0320,
+	"DOT":   0.1150,
+	"ATOM":  0.1350,
+	"NEAR":  0.0750,
+	"SUI":   0.0350,
+	"ADA":   0.0280,
+	"GRASS": 0.1800,
 }
 
 var BankCashRates = map[string]float64{

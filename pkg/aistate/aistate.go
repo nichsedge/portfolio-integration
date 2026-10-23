@@ -275,10 +275,12 @@ func GenerateAIState(snap *models.Snapshot, dbConn *sql.DB) (*AIState, error) {
 		curr := strings.ToUpper(h.Currency)
 		if curr == "IDR" {
 			idrVal += val
-		} else if curr == "USD" || models.StableCoins[h.Asset] {
+		} else if models.StableCoins[h.Asset] {
 			usdVal += val
 		} else if h.AssetClass == "Crypto" {
 			cryptoVal += val
+		} else if curr == "USD" {
+			usdVal += val
 		} else {
 			idrVal += val
 		}
