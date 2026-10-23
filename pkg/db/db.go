@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS ai_states (
 CREATE INDEX IF NOT EXISTS idx_holdings_date ON holdings(snapshot_date);
 CREATE INDEX IF NOT EXISTS idx_holdings_source ON holdings(source);
 CREATE INDEX IF NOT EXISTS idx_holdings_category ON holdings(category);
+CREATE INDEX IF NOT EXISTS idx_holdings_date_cat ON holdings(snapshot_date, category);
+CREATE INDEX IF NOT EXISTS idx_holdings_ticker ON holdings(ticker);
 `
 
 // OpenDB opens a SQLite database at the given path with WAL mode.
@@ -88,11 +90,28 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create db directory: %w", err)
 	}
 
-	dsn := fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)", dbPath)
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
+
+	pragmas := []string{
+		"PRAGMA journal_mode = WAL;",
+		"PRAGMA synchronous = NORMAL;",
+		"PRAGMA temp_store = MEMORY;",
+		"PRAGMA cache_size = -20000;",
+		"PRAGMA busy_timeout = 5000;",
+		"PRAGMA foreign_keys = ON;",
+	}
+
+	for _, p := range pragmas {
+		if _, err := db.Exec(p); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed executing %s: %w", p, err)
+		}
+	}
+
+	db.SetMaxOpenConns(1)
 
 	if err := InitDB(db); err != nil {
 		db.Close()
@@ -109,10 +128,8 @@ func InitDB(db *sql.DB) error {
 	}
 
 	// Ensure yield_rate column exists
-	rows, err := db.Query("PRAGMA table_info(holdings)")
-	if err == nil {
-		defer rows.Close()
-		hasYield := false
+	hasYield := false
+	if rows, err := db.Query("PRAGMA table_info(holdings)"); err == nil {
 		for rows.Next() {
 			var cid int
 			var name, ctype string
@@ -125,9 +142,10 @@ func InitDB(db *sql.DB) error {
 				}
 			}
 		}
-		if !hasYield {
-			_, _ = db.Exec("ALTER TABLE holdings ADD COLUMN yield_rate REAL;")
-		}
+		rows.Close()
+	}
+	if !hasYield {
+		_, _ = db.Exec("ALTER TABLE holdings ADD COLUMN yield_rate REAL;")
 	}
 
 	// Standardize legacy source taxonomy and resolve UNKNOWN assets
