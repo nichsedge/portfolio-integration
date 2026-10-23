@@ -79,6 +79,13 @@ func EnrichHoldings(holdings []models.Holding) []models.Holding {
 	for i := range holdings {
 		h := &holdings[i]
 
+		// Standardize source taxonomy
+		if h.Source == "EVM Wallet" || strings.ToLower(h.Source) == "evm" {
+			h.Source = "debank"
+		} else if h.Source == "SOL Wallet" || strings.ToLower(h.Source) == "sol" {
+			h.Source = "alchemy"
+		}
+
 		// Ensure native Solana asset resolution
 		if (h.Asset == "UNKNOWN" || h.Asset == "") && (strings.Contains(strings.ToLower(h.Source), "sol") || strings.Contains(strings.ToLower(h.Source), "alchemy")) {
 			h.Asset = "SOL"

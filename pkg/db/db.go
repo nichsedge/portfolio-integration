@@ -130,6 +130,13 @@ func InitDB(db *sql.DB) error {
 		}
 	}
 
+	// Standardize legacy source taxonomy and resolve UNKNOWN assets
+	_, _ = db.Exec(`
+		UPDATE holdings SET source = 'debank' WHERE source = 'EVM Wallet';
+		UPDATE holdings SET source = 'alchemy' WHERE source = 'SOL Wallet';
+		UPDATE holdings SET ticker = 'SOL', name = 'Solana' WHERE (ticker = 'UNKNOWN' OR ticker = '' OR ticker IS NULL) AND source = 'alchemy';
+	`)
+
 	return nil
 }
 

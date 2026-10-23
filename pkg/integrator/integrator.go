@@ -35,6 +35,13 @@ func Integrate(date string, allHoldings []models.Holding, exchangeRate float64, 
 			h.ValueIDR = &zero
 			h.ValueUSD = &zero
 		}
+		// Standardize source taxonomy
+		if h.Source == "EVM Wallet" || strings.ToLower(h.Source) == "evm" {
+			h.Source = "debank"
+		} else if h.Source == "SOL Wallet" || strings.ToLower(h.Source) == "sol" {
+			h.Source = "alchemy"
+		}
+
 		if h.AssetClass == "" {
 			h.AssetClass = models.GetAssetClass(h.Category)
 		}
