@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/nichsedge/portfolio-integration/pkg/models"
+	"github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
 )
 
@@ -84,8 +86,47 @@ CREATE INDEX IF NOT EXISTS idx_holdings_date_cat ON holdings(snapshot_date, cate
 CREATE INDEX IF NOT EXISTS idx_holdings_ticker ON holdings(ticker);
 `
 
-// OpenDB opens a SQLite database at the given path with WAL mode.
+// OpenDB opens a SQLite or remote libSQL/Turso database.
 func OpenDB(dbPath string) (*sql.DB, error) {
+	tursoURL := os.Getenv("TURSO_PORTFOLIO_URL")
+	if tursoURL == "" {
+		tursoURL = os.Getenv("PORTFOLIO_TURSO_URL")
+	}
+
+	if isRemoteTarget(dbPath) || (tursoURL != "" && !strings.Contains(dbPath, "test")) {
+		target := tursoURL
+		if isRemoteTarget(dbPath) {
+			target = dbPath
+		}
+
+		token := os.Getenv("TURSO_PORTFOLIO_TOKEN")
+		if token == "" {
+			token = os.Getenv("PORTFOLIO_TURSO_TOKEN")
+		}
+
+		connector, err := libsql.NewConnector(target, libsql.WithAuthToken(token))
+		if err != nil {
+			return nil, fmt.Errorf("failed creating libsql connector for %s: %w", target, err)
+		}
+
+		db := sql.OpenDB(connector)
+
+		if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed executing PRAGMA foreign_keys = ON: %w", err)
+		}
+
+		db.SetMaxOpenConns(10)
+		db.SetMaxIdleConns(5)
+
+		if err := InitDB(db); err != nil {
+			db.Close()
+			return nil, err
+		}
+
+		return db, nil
+	}
+
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create db directory: %w", err)
 	}
@@ -119,6 +160,10 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func isRemoteTarget(target string) bool {
+	return len(target) > 8 && (target[:9] == "libsql://" || target[:8] == "https://" || target[:7] == "http://")
 }
 
 // InitDB initializes database tables.
