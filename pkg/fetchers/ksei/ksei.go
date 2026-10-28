@@ -329,3 +329,32 @@ func SaveRaw(data *RawKseiData, targetPath string) error {
 	}
 	return os.WriteFile(targetPath, b, 0644)
 }
+
+// IsDegraded returns true if both Equity and Bond sections have 0 data entries.
+// Outside market hours (pre-market or weekends), AKSES KSEI APIs often return empty
+// arrays for equities and bonds while still returning cash or mutual funds.
+func (r *RawKseiData) IsDegraded() bool {
+	if r == nil {
+		return true
+	}
+	return len(r.Equity.Data) == 0 && len(r.Bond.Data) == 0
+}
+
+// FillMissingFromPrevious fills missing Equity or Bond sections from previous data
+// when the current fetch appears to have suffered off-hours or pre-market downtime.
+func (r *RawKseiData) FillMissingFromPrevious(prev *RawKseiData) bool {
+	if r == nil || prev == nil {
+		return false
+	}
+	modified := false
+	if len(r.Equity.Data) == 0 && len(prev.Equity.Data) > 0 {
+		r.Equity = prev.Equity
+		modified = true
+	}
+	if len(r.Bond.Data) == 0 && len(prev.Bond.Data) > 0 {
+		r.Bond = prev.Bond
+		modified = true
+	}
+	return modified
+}
+

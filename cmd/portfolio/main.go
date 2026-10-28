@@ -157,6 +157,14 @@ func runAll(args []string) {
 	if kseiUser != "" && kseiPass != "" {
 		rawKsei, kseiHoldings, err := ksei.Fetch(kseiUser, kseiPass, plainPass)
 		if err == nil {
+			if rawKsei.IsDegraded() {
+				if prev := findLatestValidKseiCache(dataDir, date); prev != nil {
+					if rawKsei.FillMissingFromPrevious(prev) {
+						kseiHoldings = ksei.Standardize(rawKsei)
+						fmt.Printf("⚠️ (KSEI off-hours: preserved %d equities & %d bonds from cache) ", len(prev.Equity.Data), len(prev.Bond.Data))
+					}
+				}
+			}
 			_ = ksei.SaveRaw(rawKsei, rawKseiPath)
 			allHoldings = append(allHoldings, kseiHoldings...)
 			fmt.Printf("✓ %d holdings\n", len(kseiHoldings))
@@ -319,9 +327,60 @@ func runAll(args []string) {
 	fmt.Println("\n✨ Pipeline completed successfully!")
 }
 
+func findLatestValidKseiCache(dataDir, today string) *ksei.RawKseiData {
+	pattern := filepath.Join(dataDir, "*_raw_ksei.json")
+	matches, _ := filepath.Glob(pattern)
+	var latestMatch string
+	for _, m := range matches {
+		base := filepath.Base(m)
+		if !strings.HasPrefix(base, today) && !strings.HasPrefix(base, "latest") {
+			raw, err := os.ReadFile(m)
+			if err != nil {
+				continue
+			}
+			var d ksei.RawKseiData
+			if err := json.Unmarshal(raw, &d); err != nil {
+				continue
+			}
+			if !d.IsDegraded() {
+				if m > latestMatch {
+					latestMatch = m
+				}
+			}
+		}
+	}
+	if latestMatch != "" {
+		raw, err := os.ReadFile(latestMatch)
+		if err == nil {
+			var d ksei.RawKseiData
+			if err := json.Unmarshal(raw, &d); err == nil {
+				return &d
+			}
+		}
+	}
+	return nil
+}
+
 func tryFallbackCache(targetFile, today, dataDir, source string) {
-	if _, err := os.Stat(targetFile); err == nil {
-		return
+	if fi, err := os.Stat(targetFile); err == nil && fi.Size() > 0 {
+		if source == "ksei" {
+			raw, err := os.ReadFile(targetFile)
+			if err == nil {
+				var d ksei.RawKseiData
+				if err := json.Unmarshal(raw, &d); err == nil && !d.IsDegraded() {
+					return
+				}
+			}
+		} else {
+			return
+		}
+	}
+	if source == "ksei" {
+		if valid := findLatestValidKseiCache(dataDir, today); valid != nil {
+			_ = ksei.SaveRaw(valid, targetFile)
+			fmt.Printf("  ↳ Reused valid non-degraded KSEI cache\n")
+			return
+		}
 	}
 	pattern := filepath.Join(dataDir, fmt.Sprintf("*_raw_%s.json", source))
 	if source == "alchemy" {
@@ -424,6 +483,13 @@ func runFetch(args []string) {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
 		}
+		if raw.IsDegraded() {
+			if prev := findLatestValidKseiCache(dataDir, date); prev != nil {
+				if raw.FillMissingFromPrevious(prev) {
+					fmt.Printf("⚠️ KSEI returned 0 equities & bonds (off-hours). Preserved %d equities & %d bonds from cache.\n", len(prev.Equity.Data), len(prev.Bond.Data))
+				}
+			}
+		}
 		target := filepath.Join(dataDir, fmt.Sprintf("%s_raw_ksei.json", date))
 		_ = ksei.SaveRaw(raw, target)
 		fmt.Printf("✓ Saved to %s\n", target)
@@ -498,11 +564,24 @@ func runIntegrate(args []string) {
 	var allHoldings []models.Holding
 
 	kseiPath := filepath.Join(dataDir, fmt.Sprintf("%s_raw_ksei.json", date))
+	var kseiData *ksei.RawKseiData
 	if raw, err := os.ReadFile(kseiPath); err == nil {
 		var d ksei.RawKseiData
 		if json.Unmarshal(raw, &d) == nil {
-			allHoldings = append(allHoldings, ksei.Standardize(&d)...)
+			kseiData = &d
 		}
+	}
+	if kseiData == nil || kseiData.IsDegraded() {
+		if prev := findLatestValidKseiCache(dataDir, date); prev != nil {
+			if kseiData == nil {
+				kseiData = prev
+			} else {
+				kseiData.FillMissingFromPrevious(prev)
+			}
+		}
+	}
+	if kseiData != nil {
+		allHoldings = append(allHoldings, ksei.Standardize(kseiData)...)
 	}
 
 	debankPath := filepath.Join(dataDir, fmt.Sprintf("%s_raw_debank.json", date))
@@ -699,6 +778,30 @@ func runR2(args []string) {
 		} else {
 			fmt.Println("✓ Uploaded db/portfolio_latest.sqlite to Cloudflare R2")
 		}
+
+		date := time.Now().Format("2006-01-02")
+		snapFile := filepath.Join(dataDir, fmt.Sprintf("%s_snapshot.json", date))
+		latestFile := filepath.Join(dataDir, "latest_snapshot.json")
+		aiStateFile := filepath.Join(dataDir, "latest_ai_state.json")
+		aiDigestFile := filepath.Join(dataDir, "latest_ai_digest.md")
+		advisorFile := filepath.Join(dataDir, "latest_advisor.json")
+
+		if _, err := os.Stat(snapFile); err == nil {
+			_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, snapFile, fmt.Sprintf("portfolio/%s_snapshot.json", date))
+		}
+		if _, err := os.Stat(latestFile); err == nil {
+			_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, latestFile, "portfolio/latest_snapshot.json")
+		}
+		if _, err := os.Stat(aiStateFile); err == nil {
+			_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, aiStateFile, "portfolio/latest_ai_state.json")
+		}
+		if _, err := os.Stat(aiDigestFile); err == nil {
+			_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, aiDigestFile, "portfolio/latest_ai_digest.md")
+		}
+		if _, err := os.Stat(advisorFile); err == nil {
+			_ = r2.UploadFile(r2Acc, r2Key, r2Sec, r2Bucket, advisorFile, "portfolio/latest_advisor.json")
+		}
+		fmt.Println("✓ Cloudflare R2 portfolio snapshot & state files synced.")
 	case "status":
 		fmt.Println("Cloudflare R2 bucket: ichsanul-dev")
 	}
