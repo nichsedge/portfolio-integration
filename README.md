@@ -10,13 +10,13 @@ High-performance native Go aggregator, ETL engine, and Model Context Protocol (M
 
 `portfolio-integration` serves as the **Canonical Multi-Asset Aggregator and Ingestion Engine** in the workstation's Personal Data Architecture:
 
-1. **SSOT for Investments**: Persists all owned holdings into canonical SQLite SSOT (`data/portfolio.db` with WAL mode).
+1. **SSOT for Investments**: Persists all owned holdings into canonical Turso libSQL cloud database (`portfolio`) with local SQLite fallback.
 2. **Single-Leaf Snapshots**: Adheres to WUDAS (Workstation Unified Data Architecture Standard). Emits single-leaf snapshots:
    - `data/latest_snapshot.json`
    - `data/latest_ai_state.json`
    - `data/latest_ai_digest.md`
    - `data/latest_advisor.json`
-3. **Cloudflare R2 Synchronization**: Syncs snapshots and SQLite database bidirectionally with Cloudflare R2 (`db/portfolio_latest.sqlite`).
+3. **Cloud Synchronization**: Database records sync automatically across Workstation and Mobile via Turso libSQL. Emits `portfolio/latest_snapshot.json` to Cloudflare R2 for downstream consumption by the SansFinance Android app.
 4. **AI State & Model Context Protocol (MCP)**: Native JSON-RPC 2.0 stdio MCP server for agentic AI pairing (Claude Code, Cursor, Antigravity, Hermes Agent). Includes the **ADHD Focus Suite** (Clutter Sweeper, SBN Reinvestment Playbook, Deposit Router, Autonomous Vault).
 
 ---

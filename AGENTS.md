@@ -8,10 +8,10 @@ Universal guidelines for AI coding agents (Antigravity, Claude Code, Cursor, Cop
 
 `portfolio-integration` is the **Canonical Aggregator and ETL Engine for Multi-Asset Investments** in the workstation's Personal Data Architecture ([`~/Projects/DATA_ARCHITECTURE.md`](file:///home/al/Projects/DATA_ARCHITECTURE.md)):
 
-* **SSOT for Investments**: Tracks Indonesian equities & SBN Sukuk (KSEI), EVM DeFi (DeBank), CEX crypto (Binance), Solana (Alchemy), and cash/P2P lending (SansFinance) inside canonical SQLite SSOT (`data/portfolio.db` with WAL mode).
+* **SSOT for Investments**: Tracks Indonesian equities & SBN Sukuk (KSEI), EVM DeFi (DeBank), CEX crypto (Binance), Solana (Alchemy), and cash/P2P lending (SansFinance) inside canonical Turso (libSQL) cloud database with local SQLite fallback.
 * **Cash & P2P Intake**: Pulls cash and P2P lending balances from the `sansfinance` Android database snapshot on Cloudflare R2 (`portfolio fetch sansfinance`).
-* **WUDAS & R2 Sync**: Adheres to the Workstation Unified Data Architecture Standard. Avoids loose dated JSON files. Emits single-leaf `latest_snapshot.json` and `latest_ai_state.json`. Syncs `portfolio.db` bidirectionally with Cloudflare R2 (`db/portfolio_latest.sqlite`) via `portfolio r2 push`.
-* **Output to iERP**: Feeds high-level net worth and liquid cash totals into `ierp` (`events.db` `networth_snapshots`).
+* **WUDAS & Cloud Synchronization**: Adheres to the Workstation Unified Data Architecture Standard. Avoids loose dated JSON files. Emits single-leaf `latest_snapshot.json` and `latest_ai_state.json`. Live database state commits directly to Turso Cloud (`portfolio`), with `latest_snapshot.json` uploaded to Cloudflare R2 for downstream consumption by SansFinance on Android.
+* **Output to iERP**: Feeds high-level net worth and liquid cash totals into `ierp` (`networth_snapshots` in Turso `ierp` DB).
 * **Owned Assets vs Market Intelligence Boundary**: Strictly separate assets you own (`amount > 0` stored in `portfolio.db`) from external market intelligence / decision support feeds (`idx-bei`). Market catalogs must NEVER be ingested into `portfolio.db` or counted toward net worth.
 * **Pure Go Architecture**: The entire pipeline, ETL engine, SQLite SSOT, AI state generator, and Model Context Protocol (MCP) server are implemented in pure Go (Go 1.22+). The previous Python implementation is permanently archived on branch `python-archive`.
 
